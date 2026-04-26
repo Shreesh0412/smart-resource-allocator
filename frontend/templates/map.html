@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Map — Saarthi</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+  <!-- Leaflet Heat plugin -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+
+  <style>
+    body { overflow: hidden; }
+    #map {
+      position: fixed;
+      top: var(--nav-h);
+      left: 0; right: 0;
+      bottom: 0;
+    }
+
+    /* Override Leaflet tiles for dark theme */
+    .leaflet-tile { filter: brightness(0.75) saturate(0.7) hue-rotate(180deg); }
+
+    /* Controls panel */
+    #map-panel {
+      position: fixed;
+      top: calc(var(--nav-h) + 16px);
+      left: 16px;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      width: 210px;
+    }
+    .map-btn {
+      background: rgba(15,22,41,0.92);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      padding: 9px 14px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 150ms;
+    }
+    .map-btn:hover  { border-color: var(--orange); color: var(--orange); }
+    .map-btn.active { background: rgba(255,87,34,0.2); border-color: var(--orange); color: var(--orange); }
+
+    /* Legend */
+    #map-legend {
+      position: fixed;
+      bottom: 24px;
+      left: 16px;
+      z-index: 1000;
+      background: rgba(15,22,41,0.92);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      min-width: 180px;
+    }
+    .legend-title { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-dim); margin-bottom: 10px; }
+    .legend-row   { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; margin-bottom: 6px; }
+    .legend-dot   { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+    /* Task sidebar */
+    #task-sidebar {
+      position: fixed;
+      top: var(--nav-h);
+      right: 0;
+      width: 320px;
+      height: calc(100vh - var(--nav-h));
+      background: rgba(15,22,41,0.95);
+      backdrop-filter: blur(16px);
+      border-left: 1px solid var(--border);
+      padding: 20px;
+      z-index: 1000;
+      overflow-y: auto;
+      transform: translateX(100%);
+      transition: transform var(--anim);
+    }
+    #task-sidebar.open { transform: translateX(0); }
+    #sidebar-close {
+      position: absolute;
+      top: 16px; right: 16px;
+      background: none; border: none;
+      color: var(--text-muted); font-size: 1.1rem;
+      cursor: pointer;
+    }
+
+    /* Stats bar */
+    #map-stats {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 1000;
+      display: flex;
+      gap: 10px;
+    }
+    .map-stat {
+      background: rgba(15,22,41,0.92);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 16px;
+      text-align: center;
+    }
+    .map-stat-val { font-family: var(--font-display); font-size: 1.3rem; color: var(--orange); }
+    .map-stat-lbl { font-size: 0.68rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar">
+    <div class="container">
+      <a href="/templates/index.html" class="nav-brand"><div class="dot"></div>SAARTHI</a>
+      <div class="nav-links">
+        <span id="map-mode-label" style="font-size:0.8rem;color:var(--cyan);">Live Map</span>
+        <a href="javascript:history.back()" class="btn btn-secondary btn-sm">← Back</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Map -->
+  <div id="map"></div>
+
+  <!-- Controls -->
+  <div id="map-panel">
+    <div style="font-size:0.65rem;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:var(--text-dim);padding:0 4px;">Layers</div>
+    <button class="map-btn active" id="btn-tasks"       onclick="toggleLayer('tasks')">       📌 Task Pins</button>
+    <button class="map-btn active" id="btn-heatmap"     onclick="toggleLayer('heatmap')">     🔥 Heatmap</button>
+    <button class="map-btn"        id="btn-volunteers"  onclick="toggleLayer('volunteers')">  🙋 Volunteers</button>
+    <button class="map-btn"        id="btn-routes"      onclick="toggleLayer('routes')">      🗺️ Routes</button>
+    <button class="map-btn"        id="btn-problems"    onclick="toggleLayer('problems')">    📣 Reports</button>
+    <button class="map-btn"        id="btn-ngos"        onclick="toggleLayer('ngos')">        🏢 NGOs</button>
+    <div style="font-size:0.65rem;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:var(--text-dim);padding:0 4px;margin-top:8px;">Filter</div>
+    <select id="urgency-filter" class="form-input" style="font-size:0.82rem;padding:8px 12px;" onchange="applyFilters()">
+      <option value="">All Urgency</option>
+      <option value="urgent">🔴 Urgent</option>
+      <option value="med">🟡 Medium</option>
+      <option value="low">🟢 Low</option>
+    </select>
+    <button class="map-btn" onclick="refreshAll()" style="margin-top:4px;">🔄 Refresh All</button>
+  </div>
+
+  <!-- Legend -->
+  <div id="map-legend">
+    <div class="legend-title">Legend</div>
+    <div class="legend-row"><div class="legend-dot" style="background:#f44336;"></div>Urgent task</div>
+    <div class="legend-row"><div class="legend-dot" style="background:#ffc107;"></div>Medium task</div>
+    <div class="legend-row"><div class="legend-dot" style="background:#4caf50;"></div>Low task</div>
+    <div class="legend-row"><div class="legend-dot" style="background:#00bcd4;"></div>Volunteer</div>
+    <div class="legend-row"><div class="legend-dot" style="background:#ff5722;"></div>NGO</div>
+    <div class="legend-row"><div class="legend-dot" style="background:#7c4dff;"></div>Problem report</div>
+  </div>
+
+  <!-- Stats bar -->
+  <div id="map-stats">
+    <div class="map-stat">
+      <div class="map-stat-val" id="stat-open">—</div>
+      <div class="map-stat-lbl">Open Tasks</div>
+    </div>
+    <div class="map-stat">
+      <div class="map-stat-val" id="stat-urgent" style="color:var(--red);">—</div>
+      <div class="map-stat-lbl">Urgent</div>
+    </div>
+    <div class="map-stat">
+      <div class="map-stat-val" id="stat-vols" style="color:var(--cyan);">—</div>
+      <div class="map-stat-lbl">Volunteers</div>
+    </div>
+  </div>
+
+  <!-- Task Sidebar -->
+  <div id="task-sidebar">
+    <button id="sidebar-close" onclick="closeSidebar()">✕</button>
+    <div id="sidebar-content"></div>
+  </div>
+
+  <div id="toast-container"></div>
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/map.js"></script>
+</body>
+</html>

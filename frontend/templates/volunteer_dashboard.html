@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Volunteer Dashboard — Saarthi</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+  <style>
+    .profile-bar {
+      display: flex; align-items: center; gap: 20px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px 28px;
+      margin-bottom: 28px;
+    }
+    .profile-avatar {
+      width: 60px; height: 60px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--orange), var(--purple));
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 1.4rem; color: #fff;
+      flex-shrink: 0;
+    }
+    .profile-info { flex: 1; }
+    .profile-name { font-size: 1.2rem; font-weight: 700; margin-bottom: 4px; }
+    .profile-meta { font-size: 0.82rem; color: var(--text-muted); display:flex; gap:12px; flex-wrap:wrap; }
+
+    .score-bar {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+    }
+    .score-val {
+      font-family: var(--font-display);
+      font-size: 1.8rem;
+      color: var(--orange);
+    }
+    .score-lbl { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; }
+
+    .task-feed { display: flex; flex-direction: column; gap: 12px; }
+    .apply-btn { background: var(--orange-glow); border: 1px solid var(--orange); color: var(--orange); }
+    .apply-btn:hover { background: var(--orange); color: #fff; }
+
+    .notif-list { display: flex; flex-direction: column; gap: 10px; }
+    .notif-item {
+      background: var(--surface);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      border-left: 3px solid var(--border-light);
+      font-size: 0.88rem;
+    }
+    .notif-item.unread { border-left-color: var(--orange); }
+    .notif-title { font-weight: 600; margin-bottom: 2px; }
+    .notif-msg   { color: var(--text-muted); }
+    .notif-time  { font-size: 0.75rem; color: var(--text-dim); margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar">
+    <div class="container">
+      <a href="/templates/index.html" class="nav-brand"><div class="dot"></div>SAARTHI</a>
+      <div class="nav-links">
+        <a href="/templates/map.html" class="nav-link">🗺️ Map</a>
+        <span class="nav-link" style="cursor:pointer;position:relative;" onclick="showPanel('notifications')">
+          🔔 <span id="notif-count" class="notif-badge" style="display:none;">0</span>
+        </span>
+        <span class="nav-link" style="color:var(--text-muted);font-size:0.85rem;" id="nav-name"></span>
+        <button class="btn btn-secondary btn-sm" onclick="Auth.logout()">Logout</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="dashboard-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-label">Menu</div>
+        <button class="sidebar-link active" onclick="showPanel('overview')" id="link-overview">
+          <span class="icon">📊</span> Overview
+        </button>
+        <button class="sidebar-link" onclick="showPanel('tasks')" id="link-tasks">
+          <span class="icon">📋</span> Find Tasks
+        </button>
+        <button class="sidebar-link" onclick="showPanel('suggestions')" id="link-suggestions">
+          <span class="icon">🤖</span> AI Suggestions
+        </button>
+        <button class="sidebar-link" onclick="showPanel('history')" id="link-history">
+          <span class="icon">📁</span> My History
+        </button>
+        <button class="sidebar-link" onclick="showPanel('notifications')" id="link-notifications">
+          <span class="icon">🔔</span> Notifications
+        </button>
+        <button class="sidebar-link" onclick="showPanel('profile')" id="link-profile">
+          <span class="icon">👤</span> My Profile
+        </button>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-label">Quick</div>
+        <a href="/templates/map.html" class="sidebar-link">
+          <span class="icon">🗺️</span> Live Map
+        </a>
+        <a href="/templates/report-problem.html" class="sidebar-link">
+          <span class="icon">📣</span> Report Issue
+        </a>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- ── Overview Panel ── -->
+      <div id="panel-overview">
+        <div id="profile-bar" class="profile-bar">
+          <div class="profile-avatar" id="avatar">?</div>
+          <div class="profile-info">
+            <div class="profile-name" id="profile-name">Loading…</div>
+            <div class="profile-meta" id="profile-meta"></div>
+          </div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;">
+            <div class="score-bar text-center">
+              <div class="score-val" id="trust-val">—</div>
+              <div class="score-lbl">Trust Score</div>
+              <div class="progress-bar mt-1" style="width:100px;">
+                <div class="progress-fill" id="trust-bar" style="width:0%"></div>
+              </div>
+            </div>
+            <div class="score-bar text-center">
+              <div class="score-val" id="conf-val" style="color:var(--cyan);">—</div>
+              <div class="score-lbl">Confidence</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stats row -->
+        <div class="grid-4 mb-6" id="stats-grid">
+          <div class="stat-card fade-in">
+            <div class="stat-value" id="stat-done">—</div>
+            <div class="stat-label">Tasks Done</div>
+          </div>
+          <div class="stat-card fade-in fade-in-delay-1" style="--accent:var(--green)">
+            <div class="stat-value" id="stat-ontime" style="color:var(--green);">—</div>
+            <div class="stat-label">On Time</div>
+          </div>
+          <div class="stat-card fade-in fade-in-delay-2" style="--accent:var(--yellow)">
+            <div class="stat-value" id="stat-rating" style="color:var(--yellow);">—</div>
+            <div class="stat-label">Avg Rating</div>
+          </div>
+          <div class="stat-card fade-in fade-in-delay-3" style="--accent:var(--cyan)">
+            <div class="stat-value" id="stat-badge" style="color:var(--cyan);font-size:1.4rem;">—</div>
+            <div class="stat-label">Badge</div>
+          </div>
+        </div>
+
+        <!-- Nearby urgent tasks preview -->
+        <div class="card fade-in">
+          <div class="card-header">
+            <span class="card-title">🔴 Urgent Tasks Near You</span>
+            <button class="btn btn-secondary btn-sm" onclick="showPanel('tasks')">See All</button>
+          </div>
+          <div class="task-feed" id="urgent-preview">
+            <div class="loader"><div class="spinner"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Tasks Panel ── -->
+      <div id="panel-tasks" style="display:none;">
+        <div class="section-header">
+          <div class="section-title">📋 Available Tasks</div>
+        </div>
+
+        <!-- Filters -->
+        <div class="card mb-6">
+          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+            <div class="form-group" style="flex:1;min-width:140px;">
+              <label class="form-label">Urgency</label>
+              <select id="filter-urgency" class="form-input">
+                <option value="">All</option>
+                <option value="urgent">🔴 Urgent</option>
+                <option value="med">🟡 Medium</option>
+                <option value="low">🟢 Low</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex:1;min-width:140px;">
+              <label class="form-label">Type</label>
+              <select id="filter-type" class="form-input">
+                <option value="">All Types</option>
+                <option value="health">Health</option>
+                <option value="education">Education</option>
+                <option value="food">Food</option>
+                <option value="shelter">Shelter</option>
+                <option value="disaster">Disaster</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex:1;min-width:120px;">
+              <label class="form-label">Radius (km)</label>
+              <input type="number" id="filter-radius" class="form-input" value="10" min="1" max="50">
+            </div>
+            <button class="btn btn-primary" onclick="loadTasks()">Search</button>
+          </div>
+        </div>
+
+        <div class="task-feed" id="tasks-list">
+          <div class="loader"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- ── AI Suggestions Panel ── -->
+      <div id="panel-suggestions" style="display:none;">
+        <div class="section-header">
+          <div class="section-title">🤖 AI-Matched Tasks for You</div>
+          <button class="btn btn-secondary btn-sm" onclick="loadSuggestions()">🔄 Refresh</button>
+        </div>
+        <p class="mb-6" style="color:var(--text-muted);font-size:0.88rem;">
+          Tasks ranked by your proximity, skills, and the task's urgency — personalised for you.
+        </p>
+        <div class="task-feed" id="suggestions-list">
+          <div class="loader"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- ── History Panel ── -->
+      <div id="panel-history" style="display:none;">
+        <div class="section-header">
+          <div class="section-title">📁 Task History</div>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Task</th><th>Type</th><th>Deadline</th><th>Status</th><th>Urgency</th>
+                </tr>
+              </thead>
+              <tbody id="history-tbody">
+                <tr><td colspan="5"><div class="loader"><div class="spinner"></div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Notifications Panel ── -->
+      <div id="panel-notifications" style="display:none;">
+        <div class="section-header">
+          <div class="section-title">🔔 Notifications</div>
+        </div>
+        <div class="notif-list" id="notif-list">
+          <div class="loader"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- ── Profile Panel ── -->
+      <div id="panel-profile" style="display:none;">
+        <div class="section-header">
+          <div class="section-title">👤 My Profile</div>
+        </div>
+        <div class="grid-2 gap-6">
+          <div class="card">
+            <div class="card-header"><span class="card-title">Personal Info</span></div>
+            <form onsubmit="updateProfile(event)" style="display:flex;flex-direction:column;gap:14px;">
+              <div class="form-group">
+                <label class="form-label">Name</label>
+                <input type="text" id="p-name" class="form-input" required>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Phone</label>
+                <input type="tel" id="p-phone" class="form-input">
+              </div>
+              <div class="form-group">
+                <label class="form-label">WhatsApp Alerts</label>
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                  <input type="checkbox" id="p-whatsapp" style="accent-color:var(--orange);">
+                  <span style="font-size:0.9rem;">Receive WhatsApp notifications</span>
+                </label>
+              </div>
+              <button type="submit" class="btn btn-primary">Save Changes</button>
+            </form>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title">Reputation</span></div>
+            <div id="reputation-detail"></div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Task Detail Modal -->
+  <div class="modal-overlay" id="task-modal" style="display:none;">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-task-title">Task Details</div>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div id="modal-task-body"></div>
+    </div>
+  </div>
+
+  <!-- Proof of Work Modal -->
+  <div class="modal-overlay" id="proof-modal" style="display:none;">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">📸 Upload Proof of Work</div>
+        <button class="modal-close" onclick="document.getElementById('proof-modal').style.display='none'">✕</button>
+      </div>
+      <form onsubmit="uploadProof(event)" style="display:flex;flex-direction:column;gap:16px;">
+        <input type="hidden" id="proof-task-id">
+        <div class="form-group">
+          <label class="form-label">Upload File (photo / video / PDF)</label>
+          <input type="file" id="proof-file" class="form-input" accept="image/*,video/*,.pdf" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea id="proof-notes" class="form-input" placeholder="Describe what you did…"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">Submit Proof</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/volunteer.js"></script>
+</body>
+</html>

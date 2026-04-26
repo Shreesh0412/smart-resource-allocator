@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Saarthi — Smart Volunteer Coordination</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+  <style>
+    .features { padding: 100px 0; }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px; margin-top: 48px;
+    }
+    .feature-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 28px;
+      transition: all var(--anim);
+      position: relative; overflow: hidden;
+    }
+    .feature-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent, var(--orange)) 50%, transparent);
+      opacity: 0;
+      transition: opacity var(--anim);
+    }
+    .feature-card:hover { transform: translateY(-4px); border-color: var(--border-light); }
+    .feature-card:hover::before { opacity: 1; }
+    .feature-icon {
+      font-size: 2rem;
+      margin-bottom: 16px;
+      display: block;
+    }
+    .feature-title { font-size: 1.05rem; font-weight: 700; margin-bottom: 10px; }
+    .feature-desc { font-size: 0.88rem; color: var(--text-muted); line-height: 1.7; }
+
+    .how-it-works { padding: 80px 0; background: var(--surface); }
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 0;
+      margin-top: 48px;
+      position: relative;
+    }
+    .steps::after {
+      content: '';
+      position: absolute;
+      top: 28px; left: 10%; right: 10%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border), var(--border), transparent);
+    }
+    .step { text-align: center; padding: 0 20px; position: relative; z-index: 1; }
+    .step-num {
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      background: var(--bg);
+      border: 2px solid var(--orange);
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 16px;
+      font-family: var(--font-display);
+      font-size: 1.4rem;
+      color: var(--orange);
+    }
+    .step-title { font-weight: 700; margin-bottom: 8px; font-size: 0.95rem; }
+    .step-desc { font-size: 0.82rem; color: var(--text-muted); }
+
+    .cta-section {
+      padding: 100px 0;
+      text-align: center;
+      position: relative;
+    }
+    .cta-section::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse 60% 60% at 50% 50%, rgba(255,87,34,0.06) 0%, transparent 70%);
+    }
+    .cta-section > * { position: relative; z-index: 1; }
+    .cta-btns { display: flex; gap: 16px; justify-content: center; margin-top: 32px; flex-wrap: wrap; }
+
+    .floating-stats {
+      position: absolute;
+      right: 0; top: 50%;
+      transform: translateY(-50%);
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .floating-stat {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 20px;
+      min-width: 180px;
+      animation: floatUp 3s ease-in-out infinite alternate;
+    }
+    .floating-stat:nth-child(2) { animation-delay: 1s; }
+    .floating-stat:nth-child(3) { animation-delay: 2s; }
+    @keyframes floatUp {
+      from { transform: translateY(0); }
+      to   { transform: translateY(-8px); }
+    }
+    .fs-val { font-family: var(--font-display); font-size: 1.6rem; color: var(--orange); }
+    .fs-lbl { font-size: 0.75rem; color: var(--text-muted); }
+
+    @media (max-width: 900px) {
+      .floating-stats { display: none; }
+      .steps::after { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="navbar">
+    <div class="container">
+      <a href="/" class="nav-brand">
+        <div class="dot"></div>
+        SAARTHI
+      </a>
+      <div class="nav-links">
+        <a href="/templates/report-problem.html" class="nav-link">Report Problem</a>
+        <a href="/templates/map.html" class="nav-link">Live Map</a>
+        <a href="/templates/login.html" class="btn btn-secondary btn-sm">Login</a>
+        <a href="/templates/signup.html" class="btn btn-primary btn-sm">Join Now</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-bg"></div>
+    <div class="hero-grid"></div>
+    <div class="container" style="position:relative;z-index:2;">
+      <div style="max-width:680px;">
+        <div class="hero-eyebrow fade-in">Smart Resource Allocation Platform</div>
+        <h1 class="hero-title display fade-in fade-in-delay-1">
+          CONNECT<br>VOLUNTEERS<br><span>WHERE IT</span><br>MATTERS MOST
+        </h1>
+        <p class="hero-desc fade-in fade-in-delay-2">
+          Saarthi intelligently matches available volunteers with urgent community needs using geo-matching, AI suggestions, and real-time coordination — eliminating the chaos of scattered data.
+        </p>
+        <div class="hero-actions fade-in fade-in-delay-3">
+          <a href="/templates/signup.html?type=volunteer" class="btn btn-primary btn-lg">
+            🙋 Become a Volunteer
+          </a>
+          <a href="/templates/signup.html?type=ngo" class="btn btn-secondary btn-lg">
+            🏢 Register NGO
+          </a>
+        </div>
+        <div class="hero-stats fade-in fade-in-delay-4">
+          <div>
+            <div class="hero-stat-value">2.4K+</div>
+            <div class="hero-stat-label">Active Volunteers</div>
+          </div>
+          <div>
+            <div class="hero-stat-value">180+</div>
+            <div class="hero-stat-label">NGOs Onboard</div>
+          </div>
+          <div>
+            <div class="hero-stat-value">95%</div>
+            <div class="hero-stat-label">Task Match Rate</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Floating stats cards -->
+      <div class="floating-stats">
+        <div class="floating-stat">
+          <div class="fs-val" id="live-urgent">—</div>
+          <div class="fs-lbl">🔴 Urgent Tasks Live</div>
+        </div>
+        <div class="floating-stat">
+          <div class="fs-val" id="live-volunteers">—</div>
+          <div class="fs-lbl">🟢 Volunteers Active</div>
+        </div>
+        <div class="floating-stat">
+          <div class="fs-val" id="live-completed">—</div>
+          <div class="fs-lbl">✅ Completed Today</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="features">
+    <div class="container">
+      <div class="text-center" style="max-width:600px; margin:0 auto;">
+        <p style="color:var(--orange);font-size:0.8rem;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:12px;">Why Saarthi?</p>
+        <h2 style="margin-bottom:16px;">Every Feature Built for Real Impact</h2>
+        <p>From AI-powered matching to WhatsApp alerts — every tool is designed to eliminate friction between a volunteer and the person they can help.</p>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-card" style="--accent: var(--orange);">
+          <span class="feature-icon">🗺️</span>
+          <div class="feature-title">Geo-Based Auto Matching</div>
+          <div class="feature-desc">Automatically matches volunteers to tasks based on proximity, skills, and trust score. No more manual searching — the right volunteer, at the right place, instantly.</div>
+        </div>
+        <div class="feature-card" style="--accent: var(--cyan);">
+          <span class="feature-icon">🔥</span>
+          <div class="feature-title">Live Heatmaps & Clustering</div>
+          <div class="feature-desc">Visualize community problem density on an interactive map. Heatmaps reveal the most urgent areas at a glance — for both NGOs and coordinators.</div>
+        </div>
+        <div class="feature-card" style="--accent: var(--yellow);">
+          <span class="feature-icon">⚡</span>
+          <div class="feature-title">Task Failure Predictor</div>
+          <div class="feature-desc">AI predicts which tasks are at risk of missing deadlines based on volunteer assignment, time remaining, and proof-of-work status. Act before it's too late.</div>
+        </div>
+        <div class="feature-card" style="--accent: var(--green);">
+          <span class="feature-icon">📱</span>
+          <div class="feature-title">WhatsApp Notifications</div>
+          <div class="feature-desc">Real-time WhatsApp alerts when tasks are assigned, deadlines approach, or urgency is escalated. Volunteers stay informed without opening an app.</div>
+        </div>
+        <div class="feature-card" style="--accent: var(--purple);">
+          <span class="feature-icon">🛡️</span>
+          <div class="feature-title">Trust Score & Verified Badges</div>
+          <div class="feature-desc">Every volunteer has a trust score built from reviews, task history, and on-time completion. Verified badges signal the most reliable volunteers to NGOs.</div>
+        </div>
+        <div class="feature-card" style="--accent: var(--orange);">
+          <span class="feature-icon">📍</span>
+          <div class="feature-title">Inefficiency Detector</div>
+          <div class="feature-desc">Detects when volunteers travel significantly more than the optimal route and flags it for review — reducing wasted effort and improving resource allocation.</div>
+        </div>
+        <div class="feature-card" style="--accent: var(--cyan);">
+          <span class="feature-icon">📦</span>
+          <div class="feature-title">Resource Manager</div>
+          <div class="feature-desc">NGOs track physical resources (food, medicine, equipment) and allocate them directly to tasks. Know what you have and where it's being deployed.</div>
+        </div>
+        <div class="feature-card" style="--accent: var(--yellow);">
+          <span class="feature-icon">📸</span>
+          <div class="feature-title">Proof of Work Upload</div>
+          <div class="feature-desc">Volunteers submit photos, videos, or documents as proof of completion. NGOs approve/reject with one click. Full accountability built in.</div>
+        </div>
+        <div class="feature-card" style="--accent: var(--green);">
+          <span class="feature-icon">📊</span>
+          <div class="feature-title">Analytics Dashboard</div>
+          <div class="feature-desc">Rich analytics for NGOs: task completion rates, volunteer performance, resource utilization, and area-wise impact — all in one place.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works -->
+  <section class="how-it-works">
+    <div class="container">
+      <div class="text-center" style="max-width:600px; margin:0 auto;">
+        <p style="color:var(--cyan);font-size:0.8rem;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:12px;">The Flow</p>
+        <h2>From Problem to Resolution in 4 Steps</h2>
+      </div>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">01</div>
+          <div class="step-title">Community Reports</div>
+          <div class="step-desc">Any citizen reports a problem with location, description, and urgency.</div>
+        </div>
+        <div class="step">
+          <div class="step-num">02</div>
+          <div class="step-title">NGO Reviews & Posts</div>
+          <div class="step-desc">Local NGO approves the report and creates a structured task with deadline.</div>
+        </div>
+        <div class="step">
+          <div class="step-num">03</div>
+          <div class="step-title">AI Auto-Matches</div>
+          <div class="step-desc">System instantly finds the best volunteers nearby and sends WhatsApp alerts.</div>
+        </div>
+        <div class="step">
+          <div class="step-num">04</div>
+          <div class="step-title">Volunteer Completes</div>
+          <div class="step-desc">Volunteer accepts, completes, and uploads proof. Trust score updated.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta-section">
+    <div class="container">
+      <p style="color:var(--orange);font-size:0.8rem;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:12px;">Get Started Today</p>
+      <h2 style="font-family:var(--font-display);font-size:clamp(2rem,5vw,3.5rem);letter-spacing:0.02em;">
+        YOUR COMMUNITY<br>NEEDS YOU NOW
+      </h2>
+      <p style="max-width:500px;margin:16px auto 0;">Join thousands of volunteers and NGOs already using Saarthi to create real, measurable impact in their communities.</p>
+      <div class="cta-btns">
+        <a href="/templates/signup.html?type=volunteer" class="btn btn-primary btn-lg">Start Volunteering →</a>
+        <a href="/templates/report-problem.html" class="btn btn-secondary btn-lg">Report a Problem</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer style="border-top:1px solid var(--border);padding:32px 0;text-align:center;">
+    <div class="container">
+      <div class="nav-brand" style="justify-content:center;margin-bottom:12px;">
+        <div class="dot"></div>
+        SAARTHI
+      </div>
+      <p style="font-size:0.8rem;">Smart Resource Allocation for Social Impact · Built with ❤️ for communities</p>
+    </div>
+  </footer>
+
+  <div id="toast-container"></div>
+  <script src="/static/js/api.js"></script>
+  <script>
+    // Load live stats
+    async function loadLiveStats() {
+      try {
+        const res = await fetch('/api/admin/leaderboard');
+        // Just show placeholders for landing page
+      } catch(e) {}
+    }
+    loadLiveStats();
+
+    // Redirect logged-in users
+    if (Auth.isLoggedIn()) {
+      const type = Auth.getUserType();
+      const btn = document.createElement('a');
+    }
+  </script>
+</body>
+</html>

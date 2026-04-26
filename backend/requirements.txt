@@ -1,0 +1,25 @@
+# ── Core Framework ────────────────────────────────────────────
+Flask==3.0.3
+flask-cors==4.0.1
+flask-jwt-extended==4.6.0
+
+# ── Database ──────────────────────────────────────────────────
+pymongo==4.7.3
+dnspython==2.6.1          # Required for mongodb+srv:// URIs (MongoDB Atlas)
+
+# ── Security ──────────────────────────────────────────────────
+Werkzeug==3.0.3           # password hashing (generate_password_hash / check_password_hash)
+cryptography==42.0.8      # JWT signing dependency
+
+# ── WhatsApp / SMS ─────────────────────────────────────────────
+twilio==9.2.3
+
+# ── Scheduling (deadline reminders cron) ─────────────────────
+APScheduler==3.10.4
+
+# ── Utilities ─────────────────────────────────────────────────
+python-dotenv==1.0.1      # loads .env file into os.environ
+Pillow==10.4.0            # optional: image validation for proof-of-work uploads
+
+# ── Production Server ─────────────────────────────────────────
+gunicorn==22.0.0          # WSGI server for deployment (Render / Railway / Heroku)

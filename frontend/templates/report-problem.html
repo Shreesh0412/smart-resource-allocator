@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Report a Problem — Saarthi</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+  <style>
+    .report-page {
+      min-height: 100vh;
+      padding: 48px 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+    }
+    .report-bg {
+      position: fixed; inset: 0;
+      background:
+        radial-gradient(ellipse 50% 50% at 30% 30%, rgba(124,77,255,0.06) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 60% at 70% 70%, rgba(0,188,212,0.05) 0%, transparent 60%);
+      pointer-events: none;
+    }
+    .report-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 40px;
+      width: 100%;
+      max-width: 600px;
+      position: relative;
+      z-index: 2;
+      box-shadow: var(--shadow-lg);
+    }
+    .step-indicator {
+      display: flex;
+      gap: 0;
+      margin-bottom: 32px;
+    }
+    .step {
+      flex: 1;
+      text-align: center;
+      position: relative;
+    }
+    .step::after {
+      content: '';
+      position: absolute;
+      top: 16px; left: 50%; right: -50%;
+      height: 2px;
+      background: var(--border);
+      z-index: 0;
+    }
+    .step:last-child::after { display: none; }
+    .step-circle {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      background: var(--surface);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.8rem; font-weight: 700;
+      margin: 0 auto 6px;
+      position: relative; z-index: 1;
+      transition: all var(--anim);
+    }
+    .step.active .step-circle   { border-color: var(--orange); background: var(--orange); color: #fff; }
+    .step.done  .step-circle    { border-color: var(--green);  background: var(--green);  color: #fff; }
+    .step-label { font-size: 0.7rem; color: var(--text-muted); }
+    .step.active .step-label   { color: var(--orange); font-weight: 600; }
+
+    .form-step { display: none; }
+    .form-step.active { display: block; }
+
+    .type-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .type-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 10px;
+      text-align: center;
+      cursor: pointer;
+      transition: all var(--anim-fast);
+    }
+    .type-card:hover   { border-color: var(--border-light); }
+    .type-card.selected{ border-color: var(--orange); background: var(--orange-glow); }
+    .type-card .icon   { font-size: 1.6rem; margin-bottom: 6px; }
+    .type-card .label  { font-size: 0.78rem; font-weight: 600; }
+
+    .urgency-selector {
+      display: flex;
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .urgency-opt {
+      flex: 1;
+      padding: 12px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      text-align: center;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      transition: all var(--anim-fast);
+    }
+    .urgency-opt[data-val="low"].selected    { border-color: var(--green);  background: rgba(76,175,80,0.1);  color: var(--green); }
+    .urgency-opt[data-val="med"].selected    { border-color: var(--yellow); background: rgba(255,193,7,0.1);  color: var(--yellow); }
+    .urgency-opt[data-val="urgent"].selected { border-color: var(--red);    background: rgba(244,67,54,0.1);  color: var(--red); }
+
+    .success-card {
+      text-align: center;
+      padding: 20px 0;
+    }
+    .success-icon {
+      font-size: 4rem;
+      margin-bottom: 16px;
+    }
+
+    /* Map preview */
+    #location-preview {
+      width: 100%;
+      height: 180px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-dim);
+      font-size: 0.85rem;
+      margin-top: 8px;
+      overflow: hidden;
+      position: relative;
+    }
+    #location-pin {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -100%);
+      font-size: 2rem;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar">
+    <div class="container">
+      <a href="/templates/index.html" class="nav-brand"><div class="dot"></div>SAARTHI</a>
+      <div class="nav-links">
+        <a href="/templates/login.html" class="nav-link">Login</a>
+        <a href="/templates/signup.html" class="btn btn-secondary btn-sm">Sign Up</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="report-page">
+    <div class="report-bg"></div>
+
+    <!-- Header -->
+    <div style="text-align:center;max-width:520px;margin-bottom:32px;position:relative;z-index:2;" class="fade-in">
+      <p style="color:var(--orange);font-size:0.75rem;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px;">No Login Required</p>
+      <h1 style="font-family:var(--font-display);font-size:2.4rem;letter-spacing:0.04em;margin-bottom:12px;">REPORT A PROBLEM</h1>
+      <p>See something wrong in your community? Tell us. A local NGO will review your report and dispatch volunteers if needed.</p>
+    </div>
+
+    <div class="report-card fade-in fade-in-delay-1">
+
+      <!-- Step indicator -->
+      <div class="step-indicator">
+        <div class="step active" id="step-1"><div class="step-circle">1</div><div class="step-label">Problem</div></div>
+        <div class="step" id="step-2"><div class="step-circle">2</div><div class="step-label">Location</div></div>
+        <div class="step" id="step-3"><div class="step-circle">3</div><div class="step-label">Contact</div></div>
+      </div>
+
+      <!-- ── Step 1: Problem type & description ── -->
+      <div class="form-step active" id="fs-1">
+        <h3 style="margin-bottom:4px;">What's the problem?</h3>
+        <p style="margin-bottom:20px;font-size:0.88rem;">Select the category that best describes it.</p>
+
+        <div class="type-grid" id="type-grid">
+          <div class="type-card" data-type="health" onclick="selectType(this)">
+            <div class="icon">🏥</div><div class="label">Health</div>
+          </div>
+          <div class="type-card" data-type="food" onclick="selectType(this)">
+            <div class="icon">🍱</div><div class="label">Food</div>
+          </div>
+          <div class="type-card" data-type="shelter" onclick="selectType(this)">
+            <div class="icon">🏠</div><div class="label">Shelter</div>
+          </div>
+          <div class="type-card" data-type="disaster" onclick="selectType(this)">
+            <div class="icon">🆘</div><div class="label">Disaster</div>
+          </div>
+          <div class="type-card" data-type="environment" onclick="selectType(this)">
+            <div class="icon">🌿</div><div class="label">Environment</div>
+          </div>
+          <div class="type-card" data-type="education" onclick="selectType(this)">
+            <div class="icon">📚</div><div class="label">Education</div>
+          </div>
+          <div class="type-card" data-type="animal" onclick="selectType(this)">
+            <div class="icon">🐾</div><div class="label">Animal</div>
+          </div>
+          <div class="type-card" data-type="water" onclick="selectType(this)">
+            <div class="icon">💧</div><div class="label">Water</div>
+          </div>
+          <div class="type-card" data-type="other" onclick="selectType(this)">
+            <div class="icon">📌</div><div class="label">Other</div>
+          </div>
+        </div>
+        <div id="type-error" class="form-error mt-2" style="display:none;">Please select a problem type.</div>
+
+        <div class="form-group mt-6">
+          <label class="form-label">Describe the problem *</label>
+          <textarea id="description" class="form-input" rows="4"
+            placeholder="E.g. There's a stray dog injured near the park entrance. It needs urgent medical attention. About 5 dogs are in the area."></textarea>
+          <div id="desc-error" class="form-error" style="display:none;">Please describe the problem.</div>
+        </div>
+
+        <div class="form-group mt-4">
+          <label class="form-label">How urgent is this?</label>
+          <div class="urgency-selector">
+            <div class="urgency-opt" data-val="low"    onclick="selectUrgency(this)">🟢 Low<br><small style="font-weight:400;">Can wait</small></div>
+            <div class="urgency-opt" data-val="med"    onclick="selectUrgency(this)">🟡 Medium<br><small style="font-weight:400;">Needs attention</small></div>
+            <div class="urgency-opt" data-val="urgent" onclick="selectUrgency(this)">🔴 Urgent<br><small style="font-weight:400;">Immediate help</small></div>
+          </div>
+        </div>
+
+        <button class="btn btn-primary btn-full mt-6" onclick="nextStep(2)">Next: Location →</button>
+      </div>
+
+      <!-- ── Step 2: Location ── -->
+      <div class="form-step" id="fs-2">
+        <h3 style="margin-bottom:4px;">Where is this happening?</h3>
+        <p style="margin-bottom:20px;font-size:0.88rem;">Give us the location so we can dispatch help quickly.</p>
+
+        <div class="form-group">
+          <label class="form-label">Address / Landmark</label>
+          <input type="text" id="address" class="form-input" placeholder="e.g. Near Gandhi Park, Sector 12, Meerut">
+        </div>
+
+        <div class="form-group mt-4">
+          <label class="form-label">Coordinates *</label>
+          <div style="display:flex;gap:8px;">
+            <input type="number" id="lat" class="form-input" placeholder="Latitude"  step="any" style="flex:1;">
+            <input type="number" id="lng" class="form-input" placeholder="Longitude" step="any" style="flex:1;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="detectLocation()" title="Auto-detect">📍</button>
+          </div>
+          <div id="loc-error" class="form-error" style="display:none;">Please provide coordinates or use 📍 to auto-detect.</div>
+        </div>
+
+        <!-- Location preview box -->
+        <div id="location-preview">
+          <span id="location-hint">📍 Click the button above to detect your location</span>
+          <span id="location-pin">📍</span>
+        </div>
+
+        <div style="display:flex;gap:10px;margin-top:24px;">
+          <button class="btn btn-secondary" onclick="nextStep(1)">← Back</button>
+          <button class="btn btn-primary flex-1" onclick="nextStep(3)">Next: Contact →</button>
+        </div>
+      </div>
+
+      <!-- ── Step 3: Contact details ── -->
+      <div class="form-step" id="fs-3">
+        <h3 style="margin-bottom:4px;">Your contact details</h3>
+        <p style="margin-bottom:20px;font-size:0.88rem;">So the NGO can follow up if needed. Your info stays private.</p>
+
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div class="form-group">
+            <label class="form-label">Your Name *</label>
+            <input type="text" id="reporter-name" class="form-input" placeholder="Rahul Kumar" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Phone / WhatsApp *</label>
+            <input type="tel" id="reporter-contact" class="form-input" placeholder="+91 98765 43210" required>
+          </div>
+        </div>
+
+        <!-- Summary -->
+        <div style="background:var(--surface);border-radius:var(--radius);padding:16px;margin-top:20px;font-size:0.85rem;">
+          <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-dim);margin-bottom:10px;">Report Summary</div>
+          <div style="display:flex;flex-direction:column;gap:6px;color:var(--text-muted);">
+            <div>🏷️ <strong id="sum-type">—</strong></div>
+            <div>📋 <span id="sum-desc">—</span></div>
+            <div>⚡ Urgency: <strong id="sum-urgency">—</strong></div>
+            <div>📍 <span id="sum-loc">—</span></div>
+          </div>
+        </div>
+
+        <div id="submit-error" class="form-error mt-4" style="display:none;"></div>
+
+        <div style="display:flex;gap:10px;margin-top:24px;">
+          <button class="btn btn-secondary" onclick="nextStep(2)">← Back</button>
+          <button class="btn btn-primary flex-1" id="submit-btn" onclick="submitReport()">📣 Submit Report</button>
+        </div>
+
+        <p style="font-size:0.75rem;color:var(--text-dim);text-align:center;margin-top:12px;">
+          Your report will be reviewed by a local NGO. They may contact you for more details.
+        </p>
+      </div>
+
+      <!-- ── Success ── -->
+      <div class="form-step" id="fs-success">
+        <div class="success-card">
+          <div class="success-icon">✅</div>
+          <h2 style="margin-bottom:12px;">Report Submitted!</h2>
+          <p style="margin-bottom:8px;">Your report has been received. A local NGO will review it and take action.</p>
+          <p style="font-size:0.85rem;">Report ID: <strong id="report-id" style="color:var(--orange);font-family:var(--font-mono);"></strong></p>
+          <div style="display:flex;gap:10px;justify-content:center;margin-top:28px;flex-wrap:wrap;">
+            <button class="btn btn-secondary" onclick="resetForm()">Report Another</button>
+            <a href="/templates/map.html" class="btn btn-primary">View on Map</a>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- end .report-card -->
+  </div><!-- end .report-page -->
+
+  <div id="toast-container"></div>
+  <script src="/static/js/api.js"></script>
+  <script>
+    // ── State ─────────────────────────────────────────────────
+    let selectedType    = '';
+    let selectedUrgency = 'low';
+
+    // ── Type selection ────────────────────────────────────────
+    function selectType(el) {
+      document.querySelectorAll('.type-card').forEach(c => c.classList.remove('selected'));
+      el.classList.add('selected');
+      selectedType = el.dataset.type;
+      document.getElementById('type-error').style.display = 'none';
+    }
+
+    // ── Urgency selection ─────────────────────────────────────
+    function selectUrgency(el) {
+      document.querySelectorAll('.urgency-opt').forEach(o => o.classList.remove('selected'));
+      el.classList.add('selected');
+      selectedUrgency = el.dataset.val;
+    }
+    // Default: select low
+    document.querySelector('.urgency-opt[data-val="low"]').classList.add('selected');
+
+    // ── Location detection ────────────────────────────────────
+    async function detectLocation() {
+      const hint = document.getElementById('location-hint');
+      const pin  = document.getElementById('location-pin');
+      hint.textContent = 'Detecting…';
+      try {
+        const loc = await getUserLocation();
+        document.getElementById('lat').value = loc.lat.toFixed(6);
+        document.getElementById('lng').value = loc.lng.toFixed(6);
+        hint.style.display = 'none';
+        pin.style.display  = 'block';
+        document.getElementById('loc-error').style.display = 'none';
+        showToast('Location detected!', 'success');
+      } catch(e) {
+        hint.textContent = '⚠️ Could not detect. Enter coordinates manually.';
+        showToast('Location detection failed. Enter manually.', 'error');
+      }
+    }
+
+    // ── Step navigation ───────────────────────────────────────
+    function nextStep(toStep) {
+      // Validate current step before advancing
+      const currentStep = parseInt(document.querySelector('.form-step.active').id.replace('fs-',''));
+
+      if (toStep > currentStep) {
+        if (currentStep === 1) {
+          if (!selectedType) {
+            document.getElementById('type-error').style.display = 'block';
+            return;
+          }
+          const desc = document.getElementById('description').value.trim();
+          if (desc.length < 10) {
+            document.getElementById('desc-error').style.display = 'block';
+            document.getElementById('desc-error').textContent   = 'Please write at least 10 characters.';
+            return;
+          }
+          document.getElementById('desc-error').style.display = 'none';
+        }
+        if (currentStep === 2) {
+          const lat = document.getElementById('lat').value;
+          const lng = document.getElementById('lng').value;
+          if (!lat || !lng) {
+            document.getElementById('loc-error').style.display = 'block';
+            return;
+          }
+          // Update summary
+          document.getElementById('sum-type').textContent    = selectedType;
+          document.getElementById('sum-desc').textContent    = document.getElementById('description').value.slice(0,80) + '…';
+          document.getElementById('sum-urgency').textContent = selectedUrgency.toUpperCase();
+          document.getElementById('sum-loc').textContent     = document.getElementById('address').value || `${parseFloat(lat).toFixed(4)}, ${parseFloat(lng).toFixed(4)}`;
+        }
+      }
+
+      // Switch steps
+      document.querySelectorAll('.form-step').forEach(s => s.classList.remove('active'));
+      document.getElementById(`fs-${toStep}`).classList.add('active');
+
+      // Update step indicators
+      [1,2,3].forEach(n => {
+        const el = document.getElementById(`step-${n}`);
+        el.classList.remove('active','done');
+        if (n === toStep)      el.classList.add('active');
+        else if (n < toStep)   el.classList.add('done');
+      });
+    }
+
+    // ── Submit ────────────────────────────────────────────────
+    async function submitReport() {
+      const btn   = document.getElementById('submit-btn');
+      const errEl = document.getElementById('submit-error');
+      errEl.style.display = 'none';
+
+      const name    = document.getElementById('reporter-name').value.trim();
+      const contact = document.getElementById('reporter-contact').value.trim();
+      if (!name || !contact) {
+        errEl.textContent   = 'Please fill in your name and contact.';
+        errEl.style.display = 'block';
+        return;
+      }
+
+      btn.disabled    = true;
+      btn.textContent = 'Submitting…';
+
+      try {
+        const data = await api.json('/auth/report-problem', {
+          method: 'POST',
+          body: JSON.stringify({
+            reporter_name:    name,
+            reporter_contact: contact,
+            problem_type:     selectedType,
+            description:      document.getElementById('description').value,
+            lat:              parseFloat(document.getElementById('lat').value),
+            lng:              parseFloat(document.getElementById('lng').value),
+            address:          document.getElementById('address').value,
+            urgency:          selectedUrgency,
+          })
+        });
+
+        document.getElementById('report-id').textContent = data.report_id;
+
+        // Show success
+        document.querySelectorAll('.form-step').forEach(s => s.classList.remove('active'));
+        document.getElementById('fs-success').classList.add('active');
+        document.querySelector('.step-indicator').style.display = 'none';
+        showToast('Report submitted successfully!', 'success');
+      } catch(err) {
+        errEl.textContent   = err.message || 'Submission failed. Please try again.';
+        errEl.style.display = 'block';
+        btn.disabled        = false;
+        btn.textContent     = '📣 Submit Report';
+      }
+    }
+
+    // ── Reset form ────────────────────────────────────────────
+    function resetForm() {
+      selectedType    = '';
+      selectedUrgency = 'low';
+      document.querySelectorAll('.type-card').forEach(c => c.classList.remove('selected'));
+      document.querySelectorAll('.urgency-opt').forEach(o => o.classList.remove('selected'));
+      document.querySelector('.urgency-opt[data-val="low"]').classList.add('selected');
+      ['description','lat','lng','address','reporter-name','reporter-contact'].forEach(id => {
+        document.getElementById(id).value = '';
+      });
+      document.querySelector('.step-indicator').style.display = 'flex';
+      nextStep(1);
+    }
+  </script>
+</body>
+</html>

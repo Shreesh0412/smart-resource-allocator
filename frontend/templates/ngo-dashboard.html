@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NGO Dashboard — Saarthi</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+  <style>
+    .urgency-board { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+    .urgency-col {
+      background: var(--surface);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      padding: 16px;
+      min-height: 300px;
+    }
+    .urgency-col-header {
+      font-size: 0.72rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.12em;
+      padding-bottom: 12px;
+      margin-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .urgency-col.urgent .urgency-col-header { color: var(--red); }
+    .urgency-col.med    .urgency-col-header { color: var(--yellow); }
+    .urgency-col.low    .urgency-col-header { color: var(--green); }
+    .mini-task {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: all var(--anim-fast);
+      font-size: 0.85rem;
+    }
+    .mini-task:hover { border-color: var(--orange); background: var(--card-hover); }
+    .mini-task-title { font-weight: 600; margin-bottom: 6px; }
+    .mini-task-meta  { font-size: 0.75rem; color: var(--text-muted); display:flex; flex-direction:column; gap:2px; }
+
+    .applicant-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      display: flex; align-items: center; gap: 14px;
+    }
+    .report-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 22px;
+      transition: all var(--anim-fast);
+    }
+    .report-card:hover { border-color: var(--border-light); }
+
+    .resource-bar {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+
+    .analytics-chart {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .chart-bar-row {
+      display: flex; align-items: center; gap: 10px; font-size: 0.82rem;
+    }
+    .chart-bar-label { width: 100px; color: var(--text-muted); flex-shrink: 0; }
+    .chart-bar-track {
+      flex: 1; height: 8px;
+      background: var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .chart-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      background: linear-gradient(90deg, var(--orange), var(--orange-light));
+      transition: width 1s cubic-bezier(0.4,0,0.2,1);
+    }
+    .chart-bar-val { width: 40px; text-align: right; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar">
+    <div class="container">
+      <a href="/templates/index.html" class="nav-brand"><div class="dot"></div>SAARTHI</a>
+      <div class="nav-links">
+        <span style="color:var(--cyan);font-size:0.8rem;font-weight:600;padding:4px 10px;background:var(--cyan-glow);border-radius:4px;">NGO Portal</span>
+        <a href="/templates/map.html" class="nav-link">🗺️ Map</a>
+        <span class="nav-link" style="cursor:pointer;" onclick="showPanel('reports')">
+          📋 <span id="reports-count" class="notif-badge" style="display:none;">!</span>
+        </span>
+        <span style="color:var(--text-muted);font-size:0.85rem;" id="nav-name"></span>
+        <button class="btn btn-secondary btn-sm" onclick="Auth.logout()">Logout</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="dashboard-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-label">Dashboard</div>
+        <button class="sidebar-link active" onclick="showPanel('overview')" id="link-overview">
+          <span class="icon">📊</span> Overview
+        </button>
+        <button class="sidebar-link" onclick="showPanel('post-task')" id="link-post-task">
+          <span class="icon">➕</span> Post a Need
+        </button>
+        <button class="sidebar-link" onclick="showPanel('active')" id="link-active">
+          <span class="icon">⚡</span> Active Tasks
+        </button>
+        <button class="sidebar-link" onclick="showPanel('completed')" id="link-completed">
+          <span class="icon">✅</span> Completed
+        </button>
+        <button class="sidebar-link" onclick="showPanel('reports')" id="link-reports">
+          <span class="icon">📣</span> Reports Queue
+        </button>
+        <button class="sidebar-link" onclick="showPanel('resources')" id="link-resources">
+          <span class="icon">📦</span> Resources
+        </button>
+        <button class="sidebar-link" onclick="showPanel('analytics')" id="link-analytics">
+          <span class="icon">📈</span> Analytics
+        </button>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-label">Tools</div>
+        <a href="/templates/map.html" class="sidebar-link">
+          <span class="icon">🗺️</span> Live Map
+        </a>
+        <button class="sidebar-link" onclick="showPanel('inefficiency')" id="link-inefficiency">
+          <span class="icon">🔍</span> Inefficiency
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main-content">
+
+      <!-- ── Overview ── -->
+      <div id="panel-overview">
+        <div style="margin-bottom:28px;">
+          <h2 style="font-family:var(--font-display);letter-spacing:0.04em;" id="ngo-title">Dashboard</h2>
+          <p style="color:var(--text-muted);font-size:0.88rem;" id="ngo-subtitle"></p>
+        </div>
+
+        <div class="grid-4 mb-6" id="overview-stats">
+          <div class="stat-card fade-in" style="--accent:var(--orange)">
+            <div class="stat-value" id="ov-posted">—</div>
+            <div class="stat-label">Tasks Posted</div>
+          </div>
+          <div class="stat-card fade-in fade-in-delay-1" style="--accent:var(--green)">
+            <div class="stat-value" id="ov-completed" style="color:var(--green);">—</div>
+            <div class="stat-label">Completed</div>
+          </div>
+          <div class="stat-card fade-in fade-in-delay-2" style="--accent:var(--cyan)">
+            <div class="stat-value" id="ov-volunteers" style="color:var(--cyan);">—</div>
+            <div class="stat-label">Active Volunteers</div>
+          </div>
+          <div class="stat-card fade-in fade-in-delay-3" style="--accent:var(--yellow)">
+            <div class="stat-value" id="ov-urgent" style="color:var(--yellow);">—</div>
+            <div class="stat-label">Urgent Open</div>
+          </div>
+        </div>
+
+        <!-- Urgency board -->
+        <div class="card mb-4">
+          <div class="card-header">
+            <span class="card-title">📌 Task Urgency Board</span>
+            <button class="btn btn-secondary btn-sm" onclick="loadUrgencyBoard()">🔄 Refresh</button>
+          </div>
+          <div class="urgency-board" id="urgency-board">
+            <div class="loader"><div class="spinner"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Post a Need ── -->
+      <div id="panel-post-task" style="display:none;">
+        <div class="section-header">
+          <div class="section-title">➕ Post a Community Need</div>
+        </div>
+        <div class="card" style="max-width:700px;">
+          <form onsubmit="postTask(event)" style="display:flex;flex-direction:column;gap:16px;">
+            <div class="form-group">
+              <label class="form-label">Task Title *</label>
+              <input type="text" id="t-title" class="form-input" placeholder="e.g. Food distribution at shelter camp" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Description *</label>
+              <textarea id="t-desc" class="form-input" rows="4" placeholder="Describe exactly what needs to be done, who it helps, and any special instructions." required></textarea>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Task Type *</label>
+                <select id="t-type" class="form-input" required>
+                  <option value="">Select type…</option>
+                  <option value="health">🏥 Health</option>
+                  <option value="education">📚 Education</option>
+                  <option value="food">🍱 Food Distribution</option>
+                  <option value="shelter">🏠 Shelter</option>
+                  <option value="disaster">🆘 Disaster Relief</option>
+                  <option value="environment">🌿 Environment</option>
+                  <option value="animal">🐾 Animal Care</option>
+                  <option value="transport">🚌 Transport</option>
+                  <option value="other">📌 Other</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Volunteers Needed *</label>
+                <input type="number" id="t-volunteers" class="form-input" value="2" min="1" max="100" required>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Urgency</label>
+                <select id="t-urgency" class="form-input">
+                  <option value="">Auto (from deadline)</option>
+                  <option value="low">🟢 Low (>7 days)</option>
+                  <option value="med">🟡 Medium (2-7 days)</option>
+                  <option value="urgent">🔴 Urgent (≤1 day)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Deadline *</label>
+                <input type="datetime-local" id="t-deadline" class="form-input" required>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Address / Description</label>
+              <input type="text" id="t-address" class="form-input" placeholder="Plot 12, Sector 5, Meerut">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Location Coordinates *</label>
+              <div style="display:flex;gap:8px;">
+                <input type="number" id="t-lat" class="form-input" placeholder="Latitude" step="any" required>
+                <input type="number" id="t-lng" class="form-input" placeholder="Longitude" step="any" required>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="detectTaskLocation()">📍</button>
+              </div>
+              <p class="form-hint">Click 📍 to use your NGO's registered location</p>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Required Skills (optional)</label>
+              <div id="task-skills" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;">
+                <span class="skill-tag2" data-s="medical" onclick="toggleSkill(this)">🏥 Medical</span>
+                <span class="skill-tag2" data-s="driving" onclick="toggleSkill(this)">🚗 Driving</span>
+                <span class="skill-tag2" data-s="teaching" onclick="toggleSkill(this)">📚 Teaching</span>
+                <span class="skill-tag2" data-s="cooking" onclick="toggleSkill(this)">👨‍🍳 Cooking</span>
+                <span class="skill-tag2" data-s="logistics" onclick="toggleSkill(this)">📦 Logistics</span>
+                <span class="skill-tag2" data-s="construction" onclick="toggleSkill(this)">🔨 Construction</span>
+              </div>
+            </div>
+            <div id="post-error" class="form-error" style="display:none;"></div>
+            <div style="display:flex;gap:10px;">
+              <button type="submit" class="btn btn-primary" id="post-btn">🚀 Post Task & Auto-Match Volunteers</button>
+              <button type="reset" class="btn btn-secondary">Reset</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- ── Active Tasks ── -->
+      <div id="panel-active" style="display:none;">
+        <div class="section-header">
+          <div class="section-title">⚡ Active Requests</div>
+          <button class="btn btn-secondary btn-sm" onclick="loadActive()">🔄 Refresh</button>
+        </div>
+        <div id="active-list" style="display:flex;flex-direction:column;gap:16px;">
+          <div class="loader"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- ── Completed Tasks ── -->
+      <div id="panel-completed" style="display:none;">
+        <div class="section-header">
+          <div class="section-title">✅ Completed Tasks</div>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Title</th><th>Type</th><th>Completed</th><th>Volunteers</th><th>Actions</th></tr></thead>
+              <tbody id="completed-tbody"><tr><td colspan="5"><div class="loader"><div class="spinner"></div></div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Community Reports Queue ── -->
+      <div id="panel-reports" style="display:none;">
+        <div class="section-header">
+          <div class="section-title">📣 Community Problem Reports</div>
+          <button class="btn btn-secondary btn-sm" onclick="loadReports()">🔄 Refresh</button>
+        </div>
+        <p class="mb-6" style="color:var(--text-muted);font-size:0.88rem;">Reports submitted by community members near your area. Review and approve, reject, or convert to a task.</p>
+        <div id="reports-list" style="display:flex;flex-direction:column;gap:14px;">
+          <div class="loader"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- ── Resource Manager ── -->
+      <div id="panel-resources" style="display:none;">
+        <div class="section-header">
+          <div class="section-title">📦 Resource Manager</div>
+          <button class="btn btn-primary btn-sm" onclick="document.getElementById('add-resource-modal').style.display='flex'">+ Add Resource</button>
+        </div>
+        <div id="resources-list" style="display:flex;flex-direction:column;gap:10px;">
+          <div class="loader"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- ── Analytics ── -->
+      <div id="panel-analytics" style="display:none;">
+        <div class="section-header">
+          <div class="section-title">📈 Analytics Dashboard</div>
+          <button class="btn btn-secondary btn-sm" onclick="loadAnalytics()">🔄 Refresh</button>
+        </div>
+        <div id="analytics-content">
+          <div class="loader"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- ── Inefficiency Reports ── -->
+      <div id="panel-inefficiency" style="display:none;">
+        <div class="section-header">
+          <div class="section-title">🔍 Travel Inefficiency Reports</div>
+        </div>
+        <p class="mb-6" style="color:var(--text-muted);font-size:0.88rem;">Volunteers who traveled significantly more than the optimal route for their assigned task.</p>
+        <div id="inefficiency-list">
+          <div class="loader"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ── Task Detail Modal (NGO view) ── -->
+  <div class="modal-overlay" id="ngo-task-modal" style="display:none;">
+    <div class="modal" style="max-width:640px;">
+      <div class="modal-header">
+        <div class="modal-title" id="ngo-modal-title">Task Details</div>
+        <button class="modal-close" onclick="document.getElementById('ngo-task-modal').style.display='none'">✕</button>
+      </div>
+      <div id="ngo-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- ── Add Resource Modal ── -->
+  <div class="modal-overlay" id="add-resource-modal" style="display:none;">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">📦 Add Resource</div>
+        <button class="modal-close" onclick="document.getElementById('add-resource-modal').style.display='none'">✕</button>
+      </div>
+      <form onsubmit="addResource(event)" style="display:flex;flex-direction:column;gap:14px;">
+        <div class="form-group">
+          <label class="form-label">Name</label>
+          <input type="text" id="r-name" class="form-input" placeholder="e.g. Blankets" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Category</label>
+            <select id="r-cat" class="form-input">
+              <option value="food">Food</option>
+              <option value="medicine">Medicine</option>
+              <option value="equipment">Equipment</option>
+              <option value="clothing">Clothing</option>
+              <option value="transport">Transport</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Quantity</label>
+            <input type="number" id="r-qty" class="form-input" placeholder="100" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Unit</label>
+          <input type="text" id="r-unit" class="form-input" placeholder="kg / units / liters">
+        </div>
+        <button type="submit" class="btn btn-primary">Add Resource</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Review Volunteer Modal -->
+  <div class="modal-overlay" id="review-modal" style="display:none;">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">⭐ Review Volunteer</div>
+        <button class="modal-close" onclick="document.getElementById('review-modal').style.display='none'">✕</button>
+      </div>
+      <form onsubmit="submitReview(event)" style="display:flex;flex-direction:column;gap:14px;">
+        <input type="hidden" id="rv-vol-id">
+        <input type="hidden" id="rv-task-id">
+        <div class="form-group">
+          <label class="form-label">Rating (1-5)</label>
+          <div id="star-rating" style="display:flex;gap:8px;font-size:1.8rem;cursor:pointer;">
+            <span class="star" data-v="1">☆</span><span class="star" data-v="2">☆</span>
+            <span class="star" data-v="3">☆</span><span class="star" data-v="4">☆</span>
+            <span class="star" data-v="5">☆</span>
+          </div>
+          <input type="hidden" id="rv-rating" value="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Comment</label>
+          <textarea id="rv-comment" class="form-input" placeholder="How did this volunteer perform?"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">Submit Review</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/ngo.js"></script>
+</body>
+</html>
