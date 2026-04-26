@@ -20,7 +20,8 @@ app.config.from_object(Config)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 jwt = JWTManager(app)
 
-client = MongoClient(app.config["MONGO_URI"])
+import certifi
+client = MongoClient(app.config["MONGO_URI"], tlsCAFile=certifi.where())
 db = client[app.config["DB_NAME"]]
 
 app.db = db
