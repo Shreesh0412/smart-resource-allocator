@@ -1,16 +1,6 @@
 """
-routes/volunteer_routes.py
---------------------------
-All endpoints for the Volunteer Dashboard:
-  - Profile (view / update)
-  - My tasks (active, history)
-  - Accept / Reject a task
-  - Reviews received
-  - AI suggestions
-  - Stats + Reputation
-  - Proof of Work upload
-  - Notifications
-  - Location update
+routes/volunteer_routes.py  — FIXED
+_current_volunteer() now uses plain string identity (not dict).
 """
 
 import os
@@ -22,15 +12,17 @@ from werkzeug.utils import secure_filename
 
 from utils.decorators import volunteer_required
 from utils.helpers import serialize, serialize_list, to_oid, allowed_file, haversine_km
-from models.schemas import utcnow
+from models.schemas import utcnow, geo_point
 
 volunteer_bp = Blueprint("volunteer", __name__)
 
 
 def _current_volunteer():
-    identity = get_jwt_identity()
-    db = current_app.db
-    return db.volunteers.find_one({"_id": ObjectId(identity["id"])}), identity["id"]
+    """Returns (volunteer_doc, volunteer_id_string)."""
+    vid = get_jwt_identity()          # plain string id — FIXED
+    db  = current_app.db
+    doc = db.volunteers.find_one({"_id": ObjectId(vid)})
+    return doc, vid
 
 
 # ── Profile ───────────────────────────────────────────────────────────────────
@@ -47,16 +39,14 @@ def get_profile():
 @volunteer_bp.route("/profile", methods=["PUT"])
 @volunteer_required
 def update_profile():
-    db  = current_app.db
+    db = current_app.db
     volunteer, vid = _current_volunteer()
 
-    data    = request.get_json()
+    data    = request.get_json() or {}
     allowed = ["name", "phone", "skills", "availability", "whatsapp_opt_in"]
     update  = {k: data[k] for k in allowed if k in data}
 
-    # Allow location update
     if "lat" in data and "lng" in data:
-        from models.schemas import geo_point
         update["lat"]      = float(data["lat"])
         update["lng"]      = float(data["lng"])
         update["location"] = geo_point(float(data["lat"]), float(data["lng"]))
@@ -66,39 +56,32 @@ def update_profile():
     return jsonify({"message": "Profile updated"}), 200
 
 
-# ── Location Update (real-time tracking hook) ─────────────────────────────────
+# ── Location Update ───────────────────────────────────────────────────────────
 
 @volunteer_bp.route("/location", methods=["POST"])
 @volunteer_required
 def update_location():
-    """
-    Called periodically from the frontend to keep volunteer's location fresh.
-    Used by geo-matching and inefficiency detector.
-    """
     db   = current_app.db
-    volunteer, vid = _current_volunteer()
-    data = request.get_json()
+    _, vid = _current_volunteer()
+    data = request.get_json() or {}
 
     lat = float(data.get("lat", 0))
     lng = float(data.get("lng", 0))
 
-    from models.schemas import geo_point
     db.volunteers.update_one(
         {"_id": ObjectId(vid)},
-        {"$set": {"lat": lat, "lng": lng, "location": geo_point(lat, lng), "updated_at": utcnow()}}
+        {"$set": {"lat": lat, "lng": lng,
+                  "location": geo_point(lat, lng),
+                  "updated_at": utcnow()}}
     )
     return jsonify({"message": "Location updated"}), 200
 
 
-# ── Open Tasks (browsable feed) ───────────────────────────────────────────────
+# ── Available Tasks ───────────────────────────────────────────────────────────
 
 @volunteer_bp.route("/tasks/available", methods=["GET"])
 @volunteer_required
 def available_tasks():
-    """
-    Return open tasks within radius, sorted by urgency then proximity.
-    Query params: lat, lng, radius_km, urgency, task_type, page, per_page
-    """
     db   = current_app.db
     volunteer, vid = _current_volunteer()
 
@@ -119,31 +102,28 @@ def available_tasks():
             }
         }
     }
-    if urgency:
-        query["urgency"] = urgency
-    if task_type:
-        query["task_type"] = task_type
+    if urgency:   query["urgency"]   = urgency
+    if task_type: query["task_type"] = task_type
 
     tasks = list(db.tasks.find(query).skip((page - 1) * per_page).limit(per_page))
 
-    # Annotate distance
     for t in tasks:
         t["distance_km"] = round(haversine_km(lat, lng, t["lat"], t["lng"]), 2)
 
     return jsonify({
-        "tasks": serialize_list(tasks),
-        "page":  page,
+        "tasks":    serialize_list(tasks),
+        "page":     page,
         "per_page": per_page,
     }), 200
 
 
-# ── My Active Task ────────────────────────────────────────────────────────────
+# ── Active Task ───────────────────────────────────────────────────────────────
 
 @volunteer_bp.route("/tasks/active", methods=["GET"])
 @volunteer_required
 def my_active_task():
     db = current_app.db
-    volunteer, vid = _current_volunteer()
+    volunteer, _ = _current_volunteer()
 
     task_id = volunteer.get("active_task_id")
     if not task_id:
@@ -159,14 +139,14 @@ def my_active_task():
 @volunteer_required
 def task_history():
     db = current_app.db
-    volunteer, vid = _current_volunteer()
+    volunteer, _ = _current_volunteer()
 
     history_ids = [ObjectId(tid) for tid in volunteer.get("task_history", [])]
     tasks = list(db.tasks.find({"_id": {"$in": history_ids}}))
     return jsonify({"tasks": serialize_list(tasks)}), 200
 
 
-# ── Apply for a Task ──────────────────────────────────────────────────────────
+# ── Apply for Task ────────────────────────────────────────────────────────────
 
 @volunteer_bp.route("/tasks/<task_id>/apply", methods=["POST"])
 @volunteer_required
@@ -180,7 +160,6 @@ def apply_for_task(task_id):
     if task["status"] != "open":
         return jsonify({"error": "Task is not open for applications"}), 400
 
-    # Already applied?
     already = any(str(a["volunteer_id"]) == vid for a in task.get("applicants", []))
     if already:
         return jsonify({"error": "Already applied"}), 409
@@ -194,16 +173,15 @@ def apply_for_task(task_id):
         }}, "$set": {"updated_at": utcnow()}}
     )
 
-    # Notify the NGO
     _notify(db, task["ngo_id"], "ngo",
             "New Task Application",
-            f"Volunteer {volunteer['name']} applied for task: {task['title']}",
+            f"Volunteer {volunteer['name']} applied for: {task['title']}",
             "task_application", task_id)
 
     return jsonify({"message": "Application submitted"}), 200
 
 
-# ── Accept a Task Assignment ──────────────────────────────────────────────────
+# ── Accept Task ───────────────────────────────────────────────────────────────
 
 @volunteer_bp.route("/tasks/<task_id>/accept", methods=["POST"])
 @volunteer_required
@@ -214,8 +192,6 @@ def accept_task(task_id):
     task = db.tasks.find_one({"_id": to_oid(task_id)})
     if not task:
         return jsonify({"error": "Task not found"}), 404
-
-    # Check volunteer is in assigned_volunteers
     if vid not in [str(v) for v in task.get("assigned_volunteers", [])]:
         return jsonify({"error": "You are not assigned to this task"}), 403
 
@@ -230,13 +206,13 @@ def accept_task(task_id):
 
     _notify(db, task["ngo_id"], "ngo",
             "Task Accepted",
-            f"{volunteer['name']} accepted task: {task['title']}",
+            f"{volunteer['name']} accepted: {task['title']}",
             "task_accepted", task_id)
 
     return jsonify({"message": "Task accepted. Good luck!"}), 200
 
 
-# ── Reject a Task Assignment ──────────────────────────────────────────────────
+# ── Reject Task ───────────────────────────────────────────────────────────────
 
 @volunteer_bp.route("/tasks/<task_id>/reject", methods=["POST"])
 @volunteer_required
@@ -250,23 +226,20 @@ def reject_task(task_id):
 
     db.tasks.update_one(
         {"_id": to_oid(task_id)},
-        {
-            "$pull": {"assigned_volunteers": vid},
-            "$set":  {"status": "open", "updated_at": utcnow()}
-        }
+        {"$pull": {"assigned_volunteers": vid},
+         "$set":  {"status": "open", "updated_at": utcnow()}}
     )
     db.volunteers.update_one(
         {"_id": ObjectId(vid)},
         {"$inc": {"tasks_rejected": 1}, "$set": {"active_task_id": None}}
     )
 
-    # Apply trust penalty
     from services.trust_score import update_trust_score
     update_trust_score(db, vid, event="rejected")
 
     _notify(db, task["ngo_id"], "ngo",
             "Task Rejected",
-            f"{volunteer['name']} rejected task: {task['title']}",
+            f"{volunteer['name']} rejected: {task['title']}",
             "task_rejected", task_id)
 
     return jsonify({"message": "Task rejected"}), 200
@@ -277,10 +250,6 @@ def reject_task(task_id):
 @volunteer_bp.route("/tasks/<task_id>/proof", methods=["POST"])
 @volunteer_required
 def upload_proof(task_id):
-    """
-    Volunteer uploads photo/video/PDF as proof of completing a task.
-    The NGO sees this on their dashboard and approves/rejects.
-    """
     db = current_app.db
     volunteer, vid = _current_volunteer()
 
@@ -295,7 +264,7 @@ def upload_proof(task_id):
     if not file or not allowed_file(file.filename):
         return jsonify({"error": "File type not allowed"}), 400
 
-    filename = secure_filename(f"{task_id}_{vid}_{file.filename}")
+    filename  = secure_filename(f"{task_id}_{vid}_{file.filename}")
     save_path = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
     os.makedirs(current_app.config["UPLOAD_FOLDER"], exist_ok=True)
     file.save(save_path)
@@ -304,7 +273,7 @@ def upload_proof(task_id):
         "volunteer_id": vid,
         "file_url":     f"/uploads/proof_of_work/{filename}",
         "uploaded_at":  utcnow(),
-        "approved":     None,         # None=pending, True=approved, False=rejected
+        "approved":     None,
         "notes":        request.form.get("notes", ""),
     }
     db.tasks.update_one(
@@ -314,33 +283,34 @@ def upload_proof(task_id):
 
     _notify(db, task["ngo_id"], "ngo",
             "Proof of Work Uploaded",
-            f"{volunteer['name']} uploaded proof for task: {task['title']}",
+            f"{volunteer['name']} uploaded proof for: {task['title']}",
             "proof_uploaded", task_id)
 
-    return jsonify({"message": "Proof uploaded. Awaiting NGO approval.", "file_url": proof_entry["file_url"]}), 200
+    return jsonify({"message": "Proof uploaded. Awaiting NGO approval.",
+                    "file_url": proof_entry["file_url"]}), 200
 
 
-# ── Log Travel (Inefficiency Detector input) ──────────────────────────────────
+# ── Log Travel ────────────────────────────────────────────────────────────────
 
 @volunteer_bp.route("/tasks/<task_id>/log-travel", methods=["POST"])
 @volunteer_required
 def log_travel(task_id):
     db   = current_app.db
-    volunteer, vid = _current_volunteer()
-    data = request.get_json()
+    _, vid = _current_volunteer()
+    data = request.get_json() or {}
 
     from models.schemas import travel_log_schema
     from services.inefficiency_detector import analyze_travel
 
     log = travel_log_schema(
-        volunteer_id       = vid,
-        task_id            = task_id,
-        start_lat          = float(data["start_lat"]),
-        start_lng          = float(data["start_lng"]),
-        end_lat            = float(data["end_lat"]),
-        end_lng            = float(data["end_lng"]),
-        actual_distance_km = float(data["actual_distance_km"]),
-        optimal_distance_km= float(data["optimal_distance_km"]),
+        volunteer_id        = vid,
+        task_id             = task_id,
+        start_lat           = float(data["start_lat"]),
+        start_lng           = float(data["start_lng"]),
+        end_lat             = float(data["end_lat"]),
+        end_lng             = float(data["end_lng"]),
+        actual_distance_km  = float(data["actual_distance_km"]),
+        optimal_distance_km = float(data["optimal_distance_km"]),
     )
 
     result = db.travel_logs.insert_one(log)
@@ -348,13 +318,13 @@ def log_travel(task_id):
     return jsonify({"logged": True, "inefficiency_report": report}), 200
 
 
-# ── Reviews Received ──────────────────────────────────────────────────────────
+# ── Reviews ───────────────────────────────────────────────────────────────────
 
 @volunteer_bp.route("/reviews", methods=["GET"])
 @volunteer_required
 def my_reviews():
     db = current_app.db
-    volunteer, vid = _current_volunteer()
+    volunteer, _ = _current_volunteer()
     return jsonify({
         "reviews":    volunteer.get("reviews", []),
         "avg_rating": volunteer.get("avg_rating", 0.0),
@@ -362,14 +332,13 @@ def my_reviews():
     }), 200
 
 
-# ── Stats / Reputation ────────────────────────────────────────────────────────
+# ── Stats ─────────────────────────────────────────────────────────────────────
 
 @volunteer_bp.route("/stats", methods=["GET"])
 @volunteer_required
 def my_stats():
     db = current_app.db
-    volunteer, vid = _current_volunteer()
-
+    volunteer, _ = _current_volunteer()
     return jsonify({
         "total_tasks_done":  volunteer.get("total_tasks_done", 0),
         "tasks_on_time":     volunteer.get("tasks_on_time", 0),
@@ -383,13 +352,13 @@ def my_stats():
     }), 200
 
 
-# ── AI Suggestions (tasks matched to this volunteer) ─────────────────────────
+# ── AI Suggestions ────────────────────────────────────────────────────────────
 
 @volunteer_bp.route("/ai-suggestions", methods=["GET"])
 @volunteer_required
 def ai_suggestions():
     db = current_app.db
-    volunteer, vid = _current_volunteer()
+    volunteer, _ = _current_volunteer()
 
     from services.geo_matching import get_ai_suggestions_for_volunteer
     suggestions = get_ai_suggestions_for_volunteer(db, volunteer, current_app.config)
@@ -408,7 +377,6 @@ def my_notifications():
         {"recipient_id": vid, "recipient_type": "volunteer"}
     ).sort("created_at", -1).limit(50))
 
-    # Mark all as read
     db.notifications.update_many(
         {"recipient_id": vid, "is_read": False},
         {"$set": {"is_read": True}}

@@ -1,32 +1,47 @@
 """
-utils/decorators.py
--------------------
-JWT-based role decorators — wrap any route to enforce
-volunteer / NGO / admin access.
+utils/decorators.py  — FIXED
+Reads user_type from get_jwt() additional claims (not from identity dict).
+This matches the new _make_tokens() approach in auth_routes.py.
 """
 
 from functools import wraps
 from flask import current_app, jsonify
-from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
+from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity, get_jwt
 from bson import ObjectId
 
 
 def _get_identity_doc():
-    identity = get_jwt_identity()          # {"id": "...", "type": "volunteer|ngo|admin"}
-    if not identity:
+    """
+    Returns (db_document, user_type) for the currently authenticated user.
+    identity  = plain string MongoDB _id
+    user_type = read from JWT additional claim "user_type"
+    """
+    try:
+        user_id   = get_jwt_identity()       # plain string id
+        claims    = get_jwt()                # additional claims dict
+        user_type = claims.get("user_type")
+    except Exception:
         return None, None
-    db  = current_app.db
-    uid = ObjectId(identity["id"])
-    utype = identity.get("type")
-    if utype == "volunteer":
+
+    if not user_id or not user_type:
+        return None, None
+
+    db = current_app.db
+    try:
+        uid = ObjectId(user_id)
+    except Exception:
+        return None, None
+
+    if user_type == "volunteer":
         doc = db.volunteers.find_one({"_id": uid})
-    elif utype == "ngo":
+    elif user_type == "ngo":
         doc = db.ngos.find_one({"_id": uid})
-    elif utype == "admin":
+    elif user_type == "admin":
         doc = db.admins.find_one({"_id": uid})
     else:
         doc = None
-    return doc, utype
+
+    return doc, user_type
 
 
 def volunteer_required(fn):

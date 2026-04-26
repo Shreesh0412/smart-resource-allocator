@@ -1,9 +1,8 @@
 /**
- * static/js/volunteer.js
- * Volunteer dashboard controller
+ * static/js/volunteer.js  — FIXED
+ * All loaders: spinners are always cleared (even on error), never stuck.
  */
 
-// Auth guard
 if (!Auth.requireType('volunteer')) throw new Error('Not authenticated');
 
 document.getElementById('nav-name').textContent = Auth.getUserName() || 'Volunteer';
@@ -21,12 +20,15 @@ function showPanel(name) {
   if (link)  link.classList.add('active');
   currentPanel = name;
 
-  if (name === 'overview')     loadOverview();
-  if (name === 'tasks')        loadTasks();
-  if (name === 'suggestions')  loadSuggestions();
-  if (name === 'history')      loadHistory();
-  if (name === 'notifications')loadNotifications();
-  if (name === 'profile')      loadProfile();
+  const loaders = {
+    overview:      loadOverview,
+    tasks:         loadTasks,
+    suggestions:   loadSuggestions,
+    history:       loadHistory,
+    notifications: loadNotifications,
+    profile:       loadProfile,
+  };
+  if (loaders[name]) loaders[name]();
 }
 
 // ── Overview ──────────────────────────────────────────────────
@@ -37,56 +39,54 @@ async function loadOverview() {
       api.getVolunteerStats()
     ]);
 
-    // Profile bar
-    document.getElementById('avatar').textContent = initials(profile.name);
+    document.getElementById('avatar').textContent       = initials(profile.name);
     document.getElementById('profile-name').textContent = profile.name;
-    document.getElementById('profile-meta').innerHTML = `
+    document.getElementById('profile-meta').innerHTML   = `
       <span>📱 ${profile.phone || '—'}</span>
       <span>📍 ${profile.lat?.toFixed(3)}, ${profile.lng?.toFixed(3)}</span>
       ${profile.verified_badge ? '<span style="color:var(--orange)">✅ Verified</span>' : ''}
       <span>${profile.skills?.join(' · ') || 'No skills listed'}</span>
     `;
 
-    // Scores
     document.getElementById('trust-val').textContent  = stats.trust_score;
     document.getElementById('trust-bar').style.width  = stats.trust_score + '%';
     document.getElementById('conf-val').textContent   = stats.confidence_score;
 
-    // Stat cards
     document.getElementById('stat-done').textContent   = stats.total_tasks_done;
     document.getElementById('stat-ontime').textContent = stats.tasks_on_time;
-    document.getElementById('stat-rating').textContent = stats.avg_rating?.toFixed(1) + '⭐';
+    document.getElementById('stat-rating').textContent = (stats.avg_rating?.toFixed(1) || '0.0') + '⭐';
     document.getElementById('stat-badge').textContent  = badgeLabel(stats);
-
-    // Load urgent tasks preview
-    await loadUrgentPreview();
   } catch(e) {
-    showToast('Failed to load overview: ' + e.message, 'error');
+    showToast('Could not load profile: ' + e.message, 'error');
   }
+
+  // Load urgent preview separately so a profile error doesn't block it
+  await loadUrgentPreview();
 }
 
 async function loadUrgentPreview() {
   const el = document.getElementById('urgent-preview');
+  el.innerHTML = spinnerHTML();
   try {
     const data = await api.getAvailableTasks('?urgency=urgent&per_page=3');
     if (!data.tasks?.length) {
-      el.innerHTML = '<div class="empty-state"><div class="icon">✅</div><p>No urgent tasks near you right now.</p></div>';
+      showEmpty(el, '✅', 'No urgent tasks near you right now.');
       return;
     }
     el.innerHTML = data.tasks.map(renderTaskCard).join('');
   } catch(e) {
-    el.innerHTML = '<p style="color:var(--text-muted);padding:20px;">Could not load tasks.</p>';
+    showError(el, e.message);
   }
 }
 
 // ── Tasks ─────────────────────────────────────────────────────
 async function loadTasks() {
   const el = document.getElementById('tasks-list');
-  el.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+  el.innerHTML = spinnerHTML();
 
   const urgency = document.getElementById('filter-urgency')?.value || '';
-  const type    = document.getElementById('filter-type')?.value || '';
-  const radius  = document.getElementById('filter-radius')?.value || '10';
+  const type    = document.getElementById('filter-type')?.value    || '';
+  const radius  = document.getElementById('filter-radius')?.value  || '10';
 
   let qs = `?radius_km=${radius}`;
   if (urgency) qs += `&urgency=${urgency}`;
@@ -95,32 +95,29 @@ async function loadTasks() {
   try {
     const data = await api.getAvailableTasks(qs);
     if (!data.tasks?.length) {
-      el.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>No tasks found. Try expanding the radius.</p></div>';
+      showEmpty(el, '📭', 'No tasks found. Try expanding the radius.');
       return;
     }
     el.innerHTML = data.tasks.map(renderTaskCard).join('');
   } catch(e) {
-    el.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><p>${e.message}</p></div>`;
+    showError(el, e.message);
   }
 }
 
-// ── AI Suggestions ─────────────────────────────────────────────
+// ── AI Suggestions ────────────────────────────────────────────
 async function loadSuggestions() {
   const el = document.getElementById('suggestions-list');
-  el.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+  el.innerHTML = spinnerHTML();
   try {
     const data = await api.getAiSuggestions();
     if (!data.suggestions?.length) {
-      el.innerHTML = '<div class="empty-state"><div class="icon">🤖</div><p>No suggestions yet. Update your location and skills in Profile.</p></div>';
+      showEmpty(el, '🤖', 'No suggestions yet. Update your location and skills in Profile.');
       return;
     }
     el.innerHTML = data.suggestions.map(t => `
-      <div class="task-card" data-urgency="${t.urgency}" onclick="openTaskModal('${t._id}')">
+      <div class="task-card fade-in" data-urgency="${t.urgency}" onclick="openTaskModal('${t._id}')">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
-          <div>
-            ${urgencyBadge(t.urgency)}
-            <div class="task-card-title mt-2">${t.title}</div>
-          </div>
+          <div>${urgencyBadge(t.urgency)}<div class="task-card-title mt-2">${t.title}</div></div>
           <div style="text-align:right;">
             <div style="font-family:var(--font-display);font-size:1.4rem;color:var(--cyan);">${t.match_pct}%</div>
             <div style="font-size:0.7rem;color:var(--text-muted);">match</div>
@@ -139,13 +136,14 @@ async function loadSuggestions() {
       </div>
     `).join('');
   } catch(e) {
-    el.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><p>${e.message}</p></div>`;
+    showError(el, e.message);
   }
 }
 
-// ── History ────────────────────────────────────────────────────
+// ── History ───────────────────────────────────────────────────
 async function loadHistory() {
   const tbody = document.getElementById('history-tbody');
+  tbody.innerHTML = `<tr><td colspan="5">${spinnerHTML()}</td></tr>`;
   try {
     const data = await api.getTaskHistory();
     if (!data.tasks?.length) {
@@ -166,16 +164,16 @@ async function loadHistory() {
   }
 }
 
-// ── Notifications ──────────────────────────────────────────────
+// ── Notifications ─────────────────────────────────────────────
 async function loadNotifications() {
   const el = document.getElementById('notif-list');
-  el.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+  el.innerHTML = spinnerHTML();
   try {
     const data = await api.getMyNotifications();
     document.getElementById('notif-count').style.display = 'none';
 
     if (!data.notifications?.length) {
-      el.innerHTML = '<div class="empty-state"><div class="icon">🔔</div><p>No notifications yet.</p></div>';
+      showEmpty(el, '🔔', 'No notifications yet.');
       return;
     }
     el.innerHTML = data.notifications.map(n => `
@@ -186,19 +184,18 @@ async function loadNotifications() {
       </div>
     `).join('');
   } catch(e) {
-    el.innerHTML = `<div class="empty-state"><p>${e.message}</p></div>`;
+    showError(el, e.message);
   }
 }
 
-// ── Profile ────────────────────────────────────────────────────
+// ── Profile ───────────────────────────────────────────────────
 async function loadProfile() {
   try {
     const p = await api.getVolunteerProfile();
-    document.getElementById('p-name').value    = p.name || '';
-    document.getElementById('p-phone').value   = p.phone || '';
+    document.getElementById('p-name').value      = p.name    || '';
+    document.getElementById('p-phone').value     = p.phone   || '';
     document.getElementById('p-whatsapp').checked = p.whatsapp_opt_in !== false;
 
-    // Reputation detail
     document.getElementById('reputation-detail').innerHTML = `
       <div style="display:flex;flex-direction:column;gap:12px;">
         <div class="score-bar">
@@ -213,11 +210,11 @@ async function loadProfile() {
             <span class="score-lbl">Confidence Score</span>
             <span style="font-family:var(--font-display);font-size:1.4rem;color:var(--cyan);">${p.confidence_score}/100</span>
           </div>
-          <div class="progress-bar mt-2" style="">
-            <div style="height:100%;background:var(--cyan);width:${p.confidence_score}%;border-radius:3px;"></div>
+          <div class="progress-bar mt-2">
+            <div style="height:100%;background:var(--cyan);width:${p.confidence_score}%;border-radius:3px;transition:width 0.5s;"></div>
           </div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
           <div class="score-bar text-center">
             <div style="font-size:1.2rem;font-weight:700;color:var(--green);">${p.total_tasks_done}</div>
             <div class="score-lbl">Completed</div>
@@ -231,7 +228,7 @@ async function loadProfile() {
       </div>
     `;
   } catch(e) {
-    showToast('Failed to load profile', 'error');
+    showToast('Failed to load profile: ' + e.message, 'error');
   }
 }
 
@@ -239,9 +236,9 @@ async function updateProfile(e) {
   e.preventDefault();
   try {
     await api.put('/volunteer/profile', {
-      name:           document.getElementById('p-name').value,
-      phone:          document.getElementById('p-phone').value,
-      whatsapp_opt_in:document.getElementById('p-whatsapp').checked,
+      name:            document.getElementById('p-name').value,
+      phone:           document.getElementById('p-phone').value,
+      whatsapp_opt_in: document.getElementById('p-whatsapp').checked,
     });
     showToast('Profile updated!', 'success');
   } catch(err) {
@@ -249,7 +246,7 @@ async function updateProfile(e) {
   }
 }
 
-// ── Task Card Renderer ─────────────────────────────────────────
+// ── Task Card renderer ────────────────────────────────────────
 function renderTaskCard(t) {
   const assigned = t.assigned_volunteers?.length || 0;
   const needed   = t.volunteers_needed || 1;
@@ -266,25 +263,28 @@ function renderTaskCard(t) {
         <span>🏷️ ${t.task_type || '—'}</span>
         <span>⏰ ${formatDate(t.deadline)}</span>
         <span>👥 ${assigned}/${needed} volunteers</span>
-        <span>📍 ${t.address || 'Location on map'}</span>
+        <span>📍 ${t.address || 'See map'}</span>
       </div>
       <div class="task-card-actions">
-        ${!full ? `<button class="btn btn-sm apply-btn" onclick="event.stopPropagation();applyForTask('${t._id}',this)">✋ Apply</button>` : '<span style="font-size:0.8rem;color:var(--text-muted);">Slots full</span>'}
+        ${!full
+          ? `<button class="btn btn-sm apply-btn" onclick="event.stopPropagation();applyForTask('${t._id}',this)">✋ Apply</button>`
+          : '<span style="font-size:0.8rem;color:var(--text-muted);">Slots full</span>'
+        }
         <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openTaskModal('${t._id}')">Details →</button>
       </div>
     </div>
   `;
 }
 
-// ── Task Detail Modal ──────────────────────────────────────────
+// ── Task Detail Modal ─────────────────────────────────────────
 async function openTaskModal(taskId) {
   document.getElementById('task-modal').style.display = 'flex';
   document.getElementById('modal-task-title').textContent = 'Loading…';
-  document.getElementById('modal-task-body').innerHTML = '<div class="loader"><div class="spinner"></div></div>';
+  document.getElementById('modal-task-body').innerHTML    = spinnerHTML();
 
   try {
     const data = await api.json(`/tasks/${taskId}`);
-    const t = data.task;
+    const t    = data.task;
     const pred = t.prediction || {};
     const riskClass = `risk-${pred.risk_level || 'on_track'}`;
 
@@ -293,45 +293,29 @@ async function openTaskModal(taskId) {
       <div style="display:flex;flex-direction:column;gap:16px;">
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           ${urgencyBadge(t.urgency)} ${statusBadge(t.status)}
-          ${pred.risk_level ? `<span class="${riskClass}" style="font-size:0.8rem;font-weight:700;">${pred.risk_level === 'on_track' ? '✅' : pred.risk_level === 'at_risk' ? '⚠️' : '🚨'} ${pred.risk_level?.replace('_',' ').toUpperCase()}</span>` : ''}
+          ${pred.risk_level ? `<span class="${riskClass}" style="font-size:0.8rem;font-weight:700;">
+            ${pred.risk_level === 'on_track' ? '✅' : pred.risk_level === 'at_risk' ? '⚠️' : '🚨'}
+            ${pred.risk_level.replace('_',' ').toUpperCase()}
+          </span>` : ''}
         </div>
-
         <p style="color:var(--text-muted);font-size:0.9rem;line-height:1.7;">${t.description}</p>
-
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-          <div class="score-bar">
-            <div class="score-lbl">Task Type</div>
-            <div style="font-weight:600;margin-top:4px;">${t.task_type}</div>
-          </div>
-          <div class="score-bar">
-            <div class="score-lbl">Deadline</div>
-            <div style="font-weight:600;margin-top:4px;">${formatDate(t.deadline)}</div>
-          </div>
-          <div class="score-bar">
-            <div class="score-lbl">Location</div>
-            <div style="font-weight:600;margin-top:4px;">${t.address || `${t.lat?.toFixed(4)}, ${t.lng?.toFixed(4)}`}</div>
-          </div>
-          <div class="score-bar">
-            <div class="score-lbl">Volunteers</div>
-            <div style="font-weight:600;margin-top:4px;">${(t.assigned_volunteers?.length||0)} / ${t.volunteers_needed} needed</div>
-          </div>
+          <div class="score-bar"><div class="score-lbl">Type</div><div style="font-weight:600;">${t.task_type}</div></div>
+          <div class="score-bar"><div class="score-lbl">Deadline</div><div style="font-weight:600;">${formatDate(t.deadline)}</div></div>
+          <div class="score-bar"><div class="score-lbl">Volunteers</div><div style="font-weight:700;">${(t.assigned_volunteers?.length||0)} / ${t.volunteers_needed}</div></div>
+          <div class="score-bar"><div class="score-lbl">Location</div><div style="font-weight:600;font-size:0.85rem;">${t.address || `${t.lat?.toFixed(4)}, ${t.lng?.toFixed(4)}`}</div></div>
         </div>
-
         ${t.required_skills?.length ? `
           <div>
             <div style="font-size:0.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Required Skills</div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;">
-              ${t.required_skills.map(s=>`<span class="badge badge-open">${s}</span>`).join('')}
+              ${t.required_skills.map(s => `<span class="badge badge-open">${s}</span>`).join('')}
             </div>
-          </div>
-        ` : ''}
-
+          </div>` : ''}
         ${pred.summary ? `
           <div style="background:var(--surface);border-radius:var(--radius-sm);padding:12px 16px;font-size:0.85rem;">
             <strong>⚡ Predictor:</strong> ${pred.summary}
-          </div>
-        ` : ''}
-
+          </div>` : ''}
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
           <button class="btn btn-primary btn-sm" onclick="applyForTask('${t._id}',this)">✋ Apply for Task</button>
           <a href="/map.html?task=${t._id}" class="btn btn-secondary btn-sm">📍 View on Map</a>
@@ -348,7 +332,7 @@ function closeModal() {
   document.getElementById('task-modal').style.display = 'none';
 }
 
-// ── Apply for Task ─────────────────────────────────────────────
+// ── Apply for Task ────────────────────────────────────────────
 async function applyForTask(taskId, btn) {
   if (btn) { btn.disabled = true; btn.textContent = 'Applying…'; }
   try {
@@ -362,7 +346,7 @@ async function applyForTask(taskId, btn) {
   }
 }
 
-// ── Proof of Work ──────────────────────────────────────────────
+// ── Proof of Work ─────────────────────────────────────────────
 function openProofModal(taskId) {
   document.getElementById('proof-task-id').value = taskId;
   document.getElementById('proof-modal').style.display = 'flex';
@@ -382,9 +366,9 @@ async function uploadProof(e) {
   fd.append('notes', notes);
 
   try {
-    const res = await api.upload(`/volunteer/tasks/${taskId}/proof`, fd);
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
+    const data = await api.json(`/volunteer/tasks/${taskId}/proof`, {
+      method: 'POST', body: fd
+    });
     showToast('Proof uploaded! Awaiting NGO approval.', 'success');
     document.getElementById('proof-modal').style.display = 'none';
   } catch(err) {
@@ -392,9 +376,9 @@ async function uploadProof(e) {
   }
 }
 
-// ── Badge Label ────────────────────────────────────────────────
+// ── Badge label ───────────────────────────────────────────────
 function badgeLabel(stats) {
-  const trust = stats.trust_score || 50;
+  const trust    = stats.trust_score || 50;
   const verified = stats.verified_badge;
   if (verified && trust >= 80) return '⭐ Champion';
   if (verified)                 return '✅ Verified';
@@ -406,16 +390,16 @@ function badgeLabel(stats) {
 // ── Init ──────────────────────────────────────────────────────
 loadOverview();
 
-// Check unread notifications count
+// Check unread notifications without crashing if it fails
 (async () => {
   try {
     const res = await api.get('/volunteer/notifications');
+    if (!res.ok) return;
     const data = await res.json();
-    const unread = data.notifications?.filter(n => !n.is_read).length || 0;
+    const unread = (data.notifications || []).filter(n => !n.is_read).length;
     if (unread > 0) {
       const badge = document.getElementById('notif-count');
-      badge.textContent = unread;
-      badge.style.display = 'inline-block';
+      if (badge) { badge.textContent = unread; badge.style.display = 'inline-block'; }
     }
-  } catch(e) {}
+  } catch(_) {}
 })();
