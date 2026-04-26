@@ -47,6 +47,17 @@ from routes.ngo_routes import ngo_bp
 from routes.task_routes import task_bp
 from routes.map_routes import map_bp
 from routes.admin_routes import admin_bp
+from flask import send_from_directory
+
+# Serve homepage
+@app.route("/")
+def home():
+    return send_from_directory("templates", "index.html")
+
+# Serve all HTML pages
+@app.route("/<path:path>")
+def serve_static(path):
+    return send_from_directory("templates", path)
 
 app.register_blueprint(auth_bp,      url_prefix="/api/auth")
 app.register_blueprint(volunteer_bp, url_prefix="/api/volunteer")
