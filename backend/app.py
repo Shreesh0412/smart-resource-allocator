@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 load_dotenv()
 import os
 print("MONGO_URI =", os.getenv("MONGO_URI"))
+print("DB_NAME =", os.getenv("DB_NAME"))
 app = Flask(__name__)
 app.config.from_object(Config)
 
