@@ -29,7 +29,7 @@
 
   <div class="auth-page">
     <div style="width:100%;max-width:560px;position:relative;z-index:2;">
-      <a href="/templates/login.html" style="color:var(--text-muted);font-size:0.85rem;display:flex;align-items:center;gap:6px;margin-bottom:24px;">
+      <a href="/login.html" style="color:var(--text-muted);font-size:0.85rem;display:flex;align-items:center;gap:6px;margin-bottom:24px;">
         ← Back to Login
       </a>
 
@@ -164,7 +164,7 @@
         </form>
 
         <div class="auth-footer">
-          Already have an account? <a href="/templates/login.html">Sign in</a>
+          Already have an account? <a href="/login.html">Sign in</a>
         </div>
       </div>
     </div>
@@ -235,7 +235,7 @@
         });
         Auth.save({ ...data, type: 'volunteer' });
         showToast('Account created! Welcome to Saarthi 🎉', 'success');
-        setTimeout(() => window.location.href = '/templates/volunteer-dashboard.html', 1000);
+        setTimeout(() => window.location.href = '/volunteer-dashboard.html', 1000);
       } catch(err) {
         errEl.textContent = err.message;
         errEl.style.display = 'block';
@@ -272,7 +272,7 @@
         });
         Auth.save({ ...data, type: 'ngo' });
         showToast('NGO registered! Redirecting to dashboard…', 'success');
-        setTimeout(() => window.location.href = '/templates/ngo-dashboard.html', 1000);
+        setTimeout(() => window.location.href = '/ngo-dashboard.html', 1000);
       } catch(err) {
         errEl.textContent = err.message;
         errEl.style.display = 'block';

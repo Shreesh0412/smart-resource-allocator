@@ -12,7 +12,7 @@
   <div class="auth-page">
     <div style="width:100%;max-width:480px;position:relative;z-index:2;">
       <!-- Back link -->
-      <a href="/templates/index.html" style="color:var(--text-muted);font-size:0.85rem;display:flex;align-items:center;gap:6px;margin-bottom:24px;">
+      <a href="/index.html" style="color:var(--text-muted);font-size:0.85rem;display:flex;align-items:center;gap:6px;margin-bottom:24px;">
         ← Back to Home
       </a>
 
@@ -49,10 +49,10 @@
         </form>
 
         <div class="auth-divider"><span>or</span></div>
-        <a href="/templates/signup.html" class="btn btn-secondary btn-full">Create Account</a>
+        <a href="/signup.html" class="btn btn-secondary btn-full">Create Account</a>
 
         <div class="auth-footer">
-          Community member? <a href="/templates/report-problem.html">Report a problem</a> without logging in.
+          Community member? <a href="/report-problem.html">Report a problem</a> without logging in.
         </div>
       </div>
     </div>
@@ -95,12 +95,12 @@
           data = await api.volunteerLogin(email, password);
           Auth.save({ ...data, type: 'volunteer', name: data.name });
           showToast(`Welcome back, ${data.name}!`, 'success');
-          setTimeout(() => window.location.href = '/templates/volunteer-dashboard.html', 800);
+          setTimeout(() => window.location.href = '/volunteer-dashboard.html', 800);
         } else {
           data = await api.ngoLogin(email, password);
           Auth.save({ ...data, type: 'ngo', name: data.name });
           showToast(`Welcome back, ${data.name}!`, 'success');
-          setTimeout(() => window.location.href = '/templates/ngo-dashboard.html', 800);
+          setTimeout(() => window.location.href = '/ngo-dashboard.html', 800);
         }
       } catch(err) {
         errEl.textContent = err.message || 'Login failed. Check your credentials.';

@@ -334,7 +334,7 @@ async function openTaskModal(taskId) {
 
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
           <button class="btn btn-primary btn-sm" onclick="applyForTask('${t._id}',this)">✋ Apply for Task</button>
-          <a href="/templates/map.html?task=${t._id}" class="btn btn-secondary btn-sm">📍 View on Map</a>
+          <a href="/map.html?task=${t._id}" class="btn btn-secondary btn-sm">📍 View on Map</a>
           ${t.status === 'in_progress' ? `<button class="btn btn-cyan btn-sm" onclick="openProofModal('${t._id}')">📸 Upload Proof</button>` : ''}
         </div>
       </div>

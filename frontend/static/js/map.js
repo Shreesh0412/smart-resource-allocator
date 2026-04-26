@@ -322,7 +322,7 @@ async function openTaskSidebar(taskId) {
           <button class="btn btn-primary btn-full" onclick="applyFromMap('${t._id}')">✋ Apply for this Task</button>
         ` : ''}
         ${!Auth.isLoggedIn() ? `
-          <a href="/templates/login.html?type=volunteer" class="btn btn-primary btn-full">Login to Apply</a>
+          <a href="/login.html?type=volunteer" class="btn btn-primary btn-full">Login to Apply</a>
         ` : ''}
 
         <button class="btn btn-secondary btn-full" onclick="map.flyTo([${t.lat},${t.lng}],16)">🎯 Zoom to Task</button>

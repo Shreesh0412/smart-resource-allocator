@@ -307,7 +307,7 @@ function renderActiveTask(t) {
       <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
         <button class="btn btn-cyan btn-sm" onclick="openApplicantsModal('${t._id}')">👥 View Applicants</button>
         <button class="btn btn-secondary btn-sm" onclick="openAISuggestionsModal('${t._id}')">🤖 AI Match</button>
-        <a href="/templates/map.html?task=${t._id}" class="btn btn-secondary btn-sm">📍 Map</a>
+        <a href="/map.html?task=${t._id}" class="btn btn-secondary btn-sm">📍 Map</a>
       </div>
     </div>
   `;
@@ -387,7 +387,7 @@ async function loadReports() {
           <button class="btn btn-primary btn-sm" onclick="reviewReport('${r._id}','convert_to_task')">➕ Convert to Task</button>
           <button class="btn btn-secondary btn-sm" onclick="reviewReport('${r._id}','approve')">✅ Approve</button>
           <button class="btn btn-danger btn-sm" onclick="reviewReport('${r._id}','reject')">✕ Reject</button>
-          <a href="/templates/map.html?lat=${r.lat}&lng=${r.lng}" class="btn btn-secondary btn-sm">📍 Map</a>
+          <a href="/map.html?lat=${r.lat}&lng=${r.lng}" class="btn btn-secondary btn-sm">📍 Map</a>
         </div>
       </div>
     `).join('');
