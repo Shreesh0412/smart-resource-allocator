@@ -2,15 +2,15 @@
 Smart Resource Allocation - Volunteer Coordination Platform
 Main Flask Application Entry Point
 """
-
+from dotenv import load_dotenv
+load_dotenv()
 from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from pymongo import MongoClient, GEOSPHERE
 from config import Config
-
-from dotenv import load_dotenv
-load_dotenv()
+import os
+print("MONGO_URI =", os.getenv("MONGO_URI"))
 import os
 print("MONGO_URI =", os.getenv("MONGO_URI"))
 print("DB_NAME =", os.getenv("DB_NAME"))
