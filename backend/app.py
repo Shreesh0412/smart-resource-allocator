@@ -9,6 +9,7 @@ from flask_jwt_extended import JWTManager
 from pymongo import MongoClient, GEOSPHERE
 from config import Config
 import os
+
 from dotenv import load_dotenv
 load_dotenv()
 
