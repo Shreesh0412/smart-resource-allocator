@@ -8,11 +8,11 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from pymongo import MongoClient, GEOSPHERE
 from config import Config
-import os
 
 from dotenv import load_dotenv
 load_dotenv()
-
+import os
+print("MONGO_URI =", os.getenv("MONGO_URI"))
 app = Flask(__name__)
 app.config.from_object(Config)
 
