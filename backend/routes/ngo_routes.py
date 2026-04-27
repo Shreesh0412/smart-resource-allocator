@@ -453,14 +453,17 @@ def get_pending_reports():
         safe_reports = []
         for r in reports:
             safe_reports.append({
-                "id": str(r.get("_id")),
-                "title": r.get("problem_type", "Community Issue"),
-                "description": r.get("description", ""),
-                "status": r.get("status", "pending"),
-                "lat": r.get("lat"),
-                "lng": r.get("lng"),
-                "address": r.get("address", ""),
-                "created_at": r.get("created_at"),
+                "_id":                  str(r.get("_id")),
+                "problem_type":         r.get("problem_type", "community"),
+                "description":          r.get("description", ""),
+                "status":               r.get("status", "pending"),
+                "urgency_self_reported":r.get("urgency_self_reported", "low"),
+                "reporter_name":        r.get("reporter_name", ""),
+                "reporter_contact":     r.get("reporter_contact", ""),
+                "lat":                  r.get("lat"),
+                "lng":                  r.get("lng"),
+                "address":              r.get("address", ""),
+                "created_at":           r.get("created_at"),
             })
 
         return jsonify({"reports": safe_reports}), 200
