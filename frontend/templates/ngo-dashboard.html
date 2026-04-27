@@ -241,13 +241,9 @@
               <input type="text" id="t-address" class="form-input" placeholder="Plot 12, Sector 5, Meerut">
             </div>
             <div class="form-group">
-              <label class="form-label">Location Coordinates *</label>
-              <div style="display:flex;gap:8px;">
-                <input type="number" id="t-lat" class="form-input" placeholder="Latitude" step="any" required>
-                <input type="number" id="t-lng" class="form-input" placeholder="Longitude" step="any" required>
-                <button type="button" class="btn btn-secondary btn-sm" onclick="detectTaskLocation()">📍</button>
-              </div>
-              <p class="form-hint">Click 📍 to use your NGO's registered location</p>
+              <label class="form-label">Pincode *</label>
+              <input type="text" id="t-pincode" class="form-input" placeholder="Enter task pincode" maxlength="6" inputmode="numeric" required>
+              <p class="form-hint">Use the 6-digit Indian pincode for this task.</p>
             </div>
             <div class="form-group">
               <label class="form-label">Required Skills (optional)</label>

@@ -8,7 +8,7 @@ from flask_jwt_extended import get_jwt_identity
 from bson import ObjectId
 
 from utils.decorators import ngo_required
-from utils.helpers import serialize, serialize_list, to_oid, compute_urgency_from_deadline
+from utils.helpers import serialize, serialize_list, to_oid, compute_urgency_from_deadline, resolve_location_payload
 from models.schemas import task_schema, resource_schema, utcnow
 
 ngo_bp = Blueprint("ngo", __name__)
@@ -16,7 +16,7 @@ ngo_bp = Blueprint("ngo", __name__)
 
 def _current_ngo():
     """Returns (ngo_doc, ngo_id_string)."""
-    nid = get_jwt_identity()          # plain string id — FIXED
+    nid = get_jwt_identity()
     db  = current_app.db
     doc = db.ngos.find_one({"_id": ObjectId(nid)})
     return doc, nid
@@ -29,7 +29,8 @@ def _current_ngo():
 def get_profile():
     ngo, _ = _current_ngo()
     doc = serialize(ngo)
-    doc.pop("password_hash", None)
+    if doc:
+        doc.pop("password_hash", None)
     return jsonify(doc), 200
 
 
@@ -38,8 +39,8 @@ def get_profile():
 def update_profile():
     db = current_app.db
     _, nid = _current_ngo()
-    data = request.get_json() or {}
-    allowed = ["name", "phone", "focus_areas"]
+    data = request.get_json(silent=True) or {}
+    allowed = ["name", "phone", "focus_areas", "pincode"]
     update = {k: data[k] for k in allowed if k in data}
     update["updated_at"] = utcnow()
     db.ngos.update_one({"_id": ObjectId(nid)}, {"$set": update})
@@ -53,12 +54,16 @@ def update_profile():
 def post_task():
     db  = current_app.db
     ngo, nid = _current_ngo()
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
 
-    required = ["title", "description", "task_type", "lat", "lng", "deadline", "volunteers_needed"]
-    missing  = [f for f in required if f not in data]
+    required = ["title", "description", "task_type", "deadline", "volunteers_needed", "pincode"]
+    missing  = [f for f in required if f not in data or not data[f]]
     if missing:
         return jsonify({"error": f"Missing: {', '.join(missing)}"}), 400
+
+    loc = resolve_location_payload(data, require_pincode=True)
+    if loc.get("error"):
+        return jsonify({"error": loc["error"]}), 400
 
     urgency = data.get("urgency") or compute_urgency_from_deadline(data["deadline"])
 
@@ -67,14 +72,15 @@ def post_task():
         title             = data["title"],
         description       = data["description"],
         task_type         = data["task_type"],
-        lat               = float(data["lat"]),
-        lng               = float(data["lng"]),
+        lat               = float(loc["lat"]),
+        lng               = float(loc["lng"]),
         address           = data.get("address", ""),
         deadline          = data["deadline"],
         urgency           = urgency,
         volunteers_needed = int(data["volunteers_needed"]),
         required_skills   = data.get("required_skills", []),
         resources_needed  = data.get("resources_needed", []),
+        pincode           = loc.get("pincode", data.get("pincode", "")),
     )
     result = db.tasks.insert_one(doc)
     tid = str(result.inserted_id)
@@ -102,7 +108,7 @@ def post_task():
 def change_urgency(task_id):
     db  = current_app.db
     ngo, nid = _current_ngo()
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
 
     urgency = data.get("urgency", "").lower()
     if urgency not in ("low", "med", "urgent"):
@@ -141,9 +147,15 @@ def active_requests():
 
     for task in tasks:
         assigned = task.get("assigned_volunteers", [])
+        valid_ids = []
+        for v in assigned:
+            try:
+                valid_ids.append(ObjectId(v))
+            except Exception:
+                continue
         task["volunteer_details"] = serialize_list(list(
             db.volunteers.find(
-                {"_id": {"$in": [ObjectId(v) for v in assigned]}},
+                {"_id": {"$in": valid_ids}},
                 {"name": 1, "trust_score": 1, "phone": 1}
             )
         ))
@@ -239,7 +251,7 @@ def assign_volunteer(task_id, volunteer_id):
 def review_proof(task_id, volunteer_id):
     db  = current_app.db
     ngo, nid = _current_ngo()
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
 
     approved = data.get("approved", False)
     notes    = data.get("notes", "")
@@ -294,7 +306,7 @@ def review_proof(task_id, volunteer_id):
 def review_volunteer(volunteer_id):
     db  = current_app.db
     ngo, nid = _current_ngo()
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
 
     rating  = int(data.get("rating", 3))
     comment = data.get("comment", "")
@@ -358,7 +370,7 @@ def get_pending_reports():
 def review_report(report_id):
     db = current_app.db
     _, nid = _current_ngo()
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
 
     action = data.get("action")
     note   = data.get("note", "")
@@ -389,6 +401,7 @@ def review_report(report_id):
             deadline          = data.get("deadline", ""),
             urgency           = report.get("urgency_self_reported", "low"),
             volunteers_needed = int(data.get("volunteers_needed", 1)),
+            pincode           = report.get("pincode", ""),
         )
         result = db.tasks.insert_one(task_doc)
         update["status"]            = "converted_to_task"
@@ -446,7 +459,7 @@ def list_resources():
 def add_resource():
     db  = current_app.db
     ngo, nid = _current_ngo()
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
 
     required = ["name", "category", "quantity", "unit"]
     missing  = [f for f in required if f not in data]
@@ -459,8 +472,8 @@ def add_resource():
         category        = data["category"],
         quantity        = float(data["quantity"]),
         unit            = data["unit"],
-        lat             = float(data.get("lat", ngo["lat"])),
-        lng             = float(data.get("lng", ngo["lng"])),
+        lat             = float(ngo["lat"]),
+        lng             = float(ngo["lng"]),
         available_from  = data.get("available_from"),
         available_until = data.get("available_until"),
         notes           = data.get("notes", ""),
@@ -479,7 +492,7 @@ def update_resource(resource_id):
     if not resource:
         return jsonify({"error": "Resource not found"}), 404
 
-    data    = request.get_json() or {}
+    data    = request.get_json(silent=True) or {}
     allowed = ["name", "category", "quantity", "unit", "notes", "status"]
     update  = {k: data[k] for k in allowed if k in data}
     update["updated_at"] = utcnow()
@@ -493,7 +506,7 @@ def update_resource(resource_id):
 def allocate_resource(resource_id):
     db   = current_app.db
     _, nid = _current_ngo()
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
 
     resource = db.resources.find_one({"_id": to_oid(resource_id), "ngo_id": nid})
     if not resource:

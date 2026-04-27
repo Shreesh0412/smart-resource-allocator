@@ -24,3 +24,5 @@ Pillow==10.4.0            # optional: image validation for proof-of-work uploads
 # ── Production Server ─────────────────────────────────────────
 gunicorn==22.0.0          # WSGI server for deployment (Render / Railway / Heroku)
 certifi==2024.8.30
+
+requests==2.32.3

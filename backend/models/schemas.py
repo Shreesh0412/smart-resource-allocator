@@ -32,6 +32,7 @@ def volunteer_schema(
     lng: float,
     skills: List[str] = None,
     availability: List[str] = None,          # ["Mon", "Tue", ...]
+    pincode: str = "",
 ) -> Dict:
     return {
         "type":             "volunteer",
@@ -44,6 +45,7 @@ def volunteer_schema(
         "lng":              lng,
         "skills":           skills or [],
         "availability":     availability or [],
+        "pincode":          pincode or "",
 
         # Trust / Reputation
         "trust_score":      50,              # starts at 50/100
@@ -78,6 +80,7 @@ def ngo_schema(
     lat: float,
     lng: float,
     focus_areas: List[str] = None,
+    pincode: str = "",
 ) -> Dict:
     return {
         "type":                "ngo",
@@ -90,6 +93,7 @@ def ngo_schema(
         "lat":                 lat,
         "lng":                 lng,
         "focus_areas":         focus_areas or [],    # ["education","health", ...]
+        "pincode":             pincode or "",
 
         # Stats
         "total_tasks_posted":     0,
@@ -119,6 +123,7 @@ def task_schema(
     deadline: str,                          # ISO date string
     urgency: str,                           # "low"|"med"|"urgent"
     volunteers_needed: int = 1,
+    pincode: str = "",
     required_skills: List[str] = None,
     resources_needed: List[Dict] = None,
 ) -> Dict:
@@ -131,6 +136,7 @@ def task_schema(
         "lat":               lat,
         "lng":               lng,
         "address":           address,
+        "pincode":           pincode or "",
         "deadline":          deadline,
         "urgency":           urgency,        # "low" | "med" | "urgent"
         "volunteers_needed": volunteers_needed,
@@ -168,6 +174,7 @@ def problem_report_schema(
     address: str,
     urgency_self_reported: str = "low",
     media_urls: List[str] = None,
+    pincode: str = "",
 ) -> Dict:
     return {
         "reporter_name":        reporter_name,
@@ -179,6 +186,7 @@ def problem_report_schema(
         "lng":                  lng,
         "address":              address,
         "urgency_self_reported":urgency_self_reported,
+        "pincode":              pincode or "",
         "media_urls":           media_urls or [],
 
         # Approval flow

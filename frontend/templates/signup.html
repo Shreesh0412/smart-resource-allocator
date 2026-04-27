@@ -74,13 +74,9 @@
               </div>
             </div>
             <div class="form-group">
-              <label class="form-label">Your Location</label>
-              <div style="display:flex;gap:8px;">
-                <input type="number" id="v-lat" class="form-input" placeholder="Latitude" step="any" required style="flex:1;">
-                <input type="number" id="v-lng" class="form-input" placeholder="Longitude" step="any" required style="flex:1;">
-                <button type="button" class="btn btn-secondary btn-sm" onclick="detectLocation('v')" title="Detect my location">📍</button>
-              </div>
-              <p class="form-hint">Click 📍 to auto-detect your location</p>
+              <label class="form-label">Pincode</label>
+              <input type="text" id="v-pincode" class="form-input" placeholder="Enter your 6-digit Indian pincode" maxlength="6" inputmode="numeric" required>
+              <p class="form-hint">We use your pincode to place you on the India-only map.</p>
             </div>
             <div class="form-group">
               <label class="form-label">Skills (select all that apply)</label>
@@ -136,12 +132,9 @@
               </div>
             </div>
             <div class="form-group">
-              <label class="form-label">Organisation Location</label>
-              <div style="display:flex;gap:8px;">
-                <input type="number" id="n-lat" class="form-input" placeholder="Latitude" step="any" required style="flex:1;">
-                <input type="number" id="n-lng" class="form-input" placeholder="Longitude" step="any" required style="flex:1;">
-                <button type="button" class="btn btn-secondary btn-sm" onclick="detectLocation('n')" title="Detect location">📍</button>
-              </div>
+              <label class="form-label">Pincode</label>
+              <input type="text" id="n-pincode" class="form-input" placeholder="Enter organisation pincode" maxlength="6" inputmode="numeric" required>
+              <p class="form-hint">We will place your NGO using this Indian pincode.</p>
             </div>
             <div class="form-group">
               <label class="form-label">Focus Areas</label>
@@ -195,18 +188,6 @@
       document.getElementById('ngo-form').style.display       = role === 'ngo'       ? 'block' : 'none';
     }
 
-    async function detectLocation(prefix) {
-      try {
-        showToast('Detecting your location…', 'info');
-        const loc = await getUserLocation();
-        document.getElementById(`${prefix}-lat`).value = loc.lat.toFixed(6);
-        document.getElementById(`${prefix}-lng`).value = loc.lng.toFixed(6);
-        showToast('Location detected!', 'success');
-      } catch(e) {
-        showToast('Could not detect location. Enter manually.', 'error');
-      }
-    }
-
     async function handleVolunteerSignup(e) {
       e.preventDefault();
       const btn   = document.getElementById('v-btn');
@@ -229,8 +210,7 @@
           email:        document.getElementById('v-email').value,
           password,
           phone:        document.getElementById('v-phone').value,
-          lat:          parseFloat(document.getElementById('v-lat').value),
-          lng:          parseFloat(document.getElementById('v-lng').value),
+          pincode:      document.getElementById('v-pincode').value.trim(),
           skills:       getSelectedSkills('skill-tags'),
         });
         Auth.save({ ...data, type: 'volunteer' });
@@ -266,8 +246,7 @@
           password,
           phone:               document.getElementById('n-phone').value,
           registration_number: document.getElementById('n-reg').value,
-          lat:                 parseFloat(document.getElementById('n-lat').value),
-          lng:                 parseFloat(document.getElementById('n-lng').value),
+          pincode:             document.getElementById('n-pincode').value.trim(),
           focus_areas:         getSelectedSkills('focus-tags'),
         });
         Auth.save({ ...data, type: 'ngo' });

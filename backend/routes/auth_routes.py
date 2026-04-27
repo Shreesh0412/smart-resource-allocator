@@ -13,8 +13,8 @@ from flask_jwt_extended import (
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from models.schemas import volunteer_schema, ngo_schema, problem_report_schema, utcnow
-from utils.helpers import is_valid_email, to_oid
+from models.schemas import volunteer_schema, ngo_schema, problem_report_schema
+from utils.helpers import is_valid_email, resolve_location_payload
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -36,9 +36,9 @@ def _make_tokens(user_id: str, user_type: str):
 @auth_bp.route("/volunteer/signup", methods=["POST"])
 def volunteer_signup():
     db   = current_app.db
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
 
-    required = ["name", "email", "password", "phone", "lat", "lng"]
+    required = ["name", "email", "password", "phone", "pincode"]
     missing  = [f for f in required if f not in data or not data[f]]
     if missing:
         return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
@@ -49,15 +49,20 @@ def volunteer_signup():
     if db.volunteers.find_one({"email": data["email"].lower()}):
         return jsonify({"error": "Email already registered"}), 409
 
+    loc = resolve_location_payload(data, require_pincode=True)
+    if loc.get("error"):
+        return jsonify({"error": loc["error"]}), 400
+
     doc = volunteer_schema(
         name          = data["name"],
         email         = data["email"],
         password_hash = generate_password_hash(data["password"]),
         phone         = data.get("phone", ""),
-        lat           = float(data["lat"]),
-        lng           = float(data["lng"]),
+        lat           = float(loc["lat"]),
+        lng           = float(loc["lng"]),
         skills        = data.get("skills", []),
         availability  = data.get("availability", []),
+        pincode       = loc.get("pincode", data.get("pincode", "")),
     )
     result = db.volunteers.insert_one(doc)
     vid    = str(result.inserted_id)
@@ -67,6 +72,7 @@ def volunteer_signup():
     return jsonify({
         "message":       "Volunteer registered successfully",
         "id":            vid,
+        "type":          "volunteer",
         "name":          data["name"],
         "access_token":  access_token,
         "refresh_token": refresh_token,
@@ -78,7 +84,7 @@ def volunteer_signup():
 @auth_bp.route("/volunteer/login", methods=["POST"])
 def volunteer_login():
     db   = current_app.db
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
 
     email    = data.get("email", "").lower()
     password = data.get("password", "")
@@ -96,6 +102,7 @@ def volunteer_login():
     return jsonify({
         "message":       "Login successful",
         "id":            vid,
+        "type":          "volunteer",
         "name":          volunteer["name"],
         "trust_score":   volunteer.get("trust_score", 50),
         "is_verified":   volunteer.get("is_verified", False),
@@ -109,9 +116,9 @@ def volunteer_login():
 @auth_bp.route("/ngo/signup", methods=["POST"])
 def ngo_signup():
     db   = current_app.db
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
 
-    required = ["name", "email", "password", "phone", "registration_number", "lat", "lng"]
+    required = ["name", "email", "password", "phone", "registration_number", "pincode"]
     missing  = [f for f in required if f not in data or not data[f]]
     if missing:
         return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
@@ -122,15 +129,20 @@ def ngo_signup():
     if db.ngos.find_one({"email": data["email"].lower()}):
         return jsonify({"error": "Email already registered"}), 409
 
+    loc = resolve_location_payload(data, require_pincode=True)
+    if loc.get("error"):
+        return jsonify({"error": loc["error"]}), 400
+
     doc = ngo_schema(
         name                = data["name"],
         email               = data["email"],
         password_hash       = generate_password_hash(data["password"]),
         phone               = data["phone"],
         registration_number = data["registration_number"],
-        lat                 = float(data["lat"]),
-        lng                 = float(data["lng"]),
+        lat                 = float(loc["lat"]),
+        lng                 = float(loc["lng"]),
         focus_areas         = data.get("focus_areas", []),
+        pincode             = loc.get("pincode", data.get("pincode", "")),
     )
     result = db.ngos.insert_one(doc)
     nid    = str(result.inserted_id)
@@ -140,6 +152,7 @@ def ngo_signup():
     return jsonify({
         "message":       "NGO registered successfully",
         "id":            nid,
+        "type":          "ngo",
         "name":          data["name"],
         "access_token":  access_token,
         "refresh_token": refresh_token,
@@ -151,7 +164,7 @@ def ngo_signup():
 @auth_bp.route("/ngo/login", methods=["POST"])
 def ngo_login():
     db   = current_app.db
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
 
     email    = data.get("email", "").lower()
     password = data.get("password", "")
@@ -169,6 +182,7 @@ def ngo_login():
     return jsonify({
         "message":       "Login successful",
         "id":            nid,
+        "type":          "ngo",
         "name":          ngo["name"],
         "is_verified":   ngo.get("is_verified", False),
         "access_token":  access_token,
@@ -194,23 +208,28 @@ def refresh():
 @auth_bp.route("/report-problem", methods=["POST"])
 def report_problem():
     db   = current_app.db
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
 
-    required = ["reporter_name", "reporter_contact", "problem_type", "description", "lat", "lng"]
+    required = ["reporter_name", "reporter_contact", "problem_type", "description", "pincode"]
     missing  = [f for f in required if f not in data or not data[f]]
     if missing:
         return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
+
+    loc = resolve_location_payload(data, require_pincode=True)
+    if loc.get("error"):
+        return jsonify({"error": loc["error"]}), 400
 
     doc = problem_report_schema(
         reporter_name         = data["reporter_name"],
         reporter_contact      = data["reporter_contact"],
         problem_type          = data["problem_type"],
         description           = data["description"],
-        lat                   = float(data["lat"]),
-        lng                   = float(data["lng"]),
+        lat                   = float(loc["lat"]),
+        lng                   = float(loc["lng"]),
         address               = data.get("address", ""),
         urgency_self_reported = data.get("urgency", "low"),
         media_urls            = data.get("media_urls", []),
+        pincode               = loc.get("pincode", data.get("pincode", "")),
     )
     result = db.problem_reports.insert_one(doc)
     return jsonify({

@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 
 import certifi
-from flask import Flask, jsonify, render_template, redirect, url_for
+from flask import Flask, jsonify, render_template, redirect, url_for, send_from_directory
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from pymongo import MongoClient, GEOSPHERE
@@ -47,6 +47,13 @@ def create_indexes():
     db.notifications.create_index("created_at")
     db.problem_reports.create_index("status")
     print("✅ MongoDB indexes created")
+
+# Ensure indexes exist on startup (works for both dev server and gunicorn)
+try:
+    with app.app_context():
+        create_indexes()
+except Exception as _index_exc:
+    print(f"⚠️ MongoDB index creation skipped: {_index_exc}")
 
 from routes.auth_routes import auth_bp
 from routes.volunteer_routes import volunteer_bp
@@ -113,6 +120,10 @@ def map_page():
 @app.route("/report-problem.html", methods=["GET"])
 def report_problem_page():
     return render_template("report-problem.html")
+
+@app.route("/uploads/proof_of_work/<path:filename>", methods=["GET"])
+def uploaded_proof(filename):
+    return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
 
 
 # Backward compatibility for old URLs that still include /templates/

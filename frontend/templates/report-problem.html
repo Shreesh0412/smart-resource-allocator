@@ -241,18 +241,14 @@
         </div>
 
         <div class="form-group mt-4">
-          <label class="form-label">Coordinates *</label>
-          <div style="display:flex;gap:8px;">
-            <input type="number" id="lat" class="form-input" placeholder="Latitude"  step="any" style="flex:1;">
-            <input type="number" id="lng" class="form-input" placeholder="Longitude" step="any" style="flex:1;">
-            <button type="button" class="btn btn-secondary btn-sm" onclick="detectLocation()" title="Auto-detect">📍</button>
-          </div>
-          <div id="loc-error" class="form-error" style="display:none;">Please provide coordinates or use 📍 to auto-detect.</div>
+          <label class="form-label">Pincode *</label>
+          <input type="text" id="pincode" class="form-input" placeholder="Enter 6-digit Indian pincode" maxlength="6" inputmode="numeric">
+          <div id="loc-error" class="form-error" style="display:none;">Please enter a valid Indian pincode.</div>
         </div>
 
         <!-- Location preview box -->
         <div id="location-preview">
-          <span id="location-hint">📍 Click the button above to detect your location</span>
+          <span id="location-hint">📍 Enter a pincode to pin this report in India</span>
           <span id="location-pin">📍</span>
         </div>
 
@@ -343,24 +339,6 @@
     document.querySelector('.urgency-opt[data-val="low"]').classList.add('selected');
 
     // ── Location detection ────────────────────────────────────
-    async function detectLocation() {
-      const hint = document.getElementById('location-hint');
-      const pin  = document.getElementById('location-pin');
-      hint.textContent = 'Detecting…';
-      try {
-        const loc = await getUserLocation();
-        document.getElementById('lat').value = loc.lat.toFixed(6);
-        document.getElementById('lng').value = loc.lng.toFixed(6);
-        hint.style.display = 'none';
-        pin.style.display  = 'block';
-        document.getElementById('loc-error').style.display = 'none';
-        showToast('Location detected!', 'success');
-      } catch(e) {
-        hint.textContent = '⚠️ Could not detect. Enter coordinates manually.';
-        showToast('Location detection failed. Enter manually.', 'error');
-      }
-    }
-
     // ── Step navigation ───────────────────────────────────────
     function nextStep(toStep) {
       // Validate current step before advancing
@@ -381,17 +359,17 @@
           document.getElementById('desc-error').style.display = 'none';
         }
         if (currentStep === 2) {
-          const lat = document.getElementById('lat').value;
-          const lng = document.getElementById('lng').value;
-          if (!lat || !lng) {
+          const pincode = document.getElementById('pincode').value.trim();
+          if (!/^\d{6}$/.test(pincode)) {
             document.getElementById('loc-error').style.display = 'block';
             return;
           }
+          document.getElementById('loc-error').style.display = 'none';
           // Update summary
           document.getElementById('sum-type').textContent    = selectedType;
           document.getElementById('sum-desc').textContent    = document.getElementById('description').value.slice(0,80) + '…';
           document.getElementById('sum-urgency').textContent = selectedUrgency.toUpperCase();
-          document.getElementById('sum-loc').textContent     = document.getElementById('address').value || `${parseFloat(lat).toFixed(4)}, ${parseFloat(lng).toFixed(4)}`;
+          document.getElementById('sum-loc').textContent     = `${document.getElementById('address').value || 'Pincode'} · ${pincode}`;
         }
       }
 
@@ -433,8 +411,7 @@
             reporter_contact: contact,
             problem_type:     selectedType,
             description:      document.getElementById('description').value,
-            lat:              parseFloat(document.getElementById('lat').value),
-            lng:              parseFloat(document.getElementById('lng').value),
+            pincode:          document.getElementById('pincode').value.trim(),
             address:          document.getElementById('address').value,
             urgency:          selectedUrgency,
           })
@@ -462,7 +439,7 @@
       document.querySelectorAll('.type-card').forEach(c => c.classList.remove('selected'));
       document.querySelectorAll('.urgency-opt').forEach(o => o.classList.remove('selected'));
       document.querySelector('.urgency-opt[data-val="low"]').classList.add('selected');
-      ['description','lat','lng','address','reporter-name','reporter-contact'].forEach(id => {
+      ['description','pincode','address','reporter-name','reporter-contact'].forEach(id => {
         document.getElementById(id).value = '';
       });
       document.querySelector('.step-indicator').style.display = 'flex';

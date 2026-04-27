@@ -84,24 +84,34 @@
 
     .floating-stats {
       position: absolute;
-      right: 0; top: 50%;
+      right: clamp(-130px, -10vw, -48px);
+      top: 52%;
       transform: translateY(-50%);
-      display: flex; flex-direction: column; gap: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 240px;
     }
+
     .floating-stat {
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 14px 20px;
-      min-width: 180px;
+      min-width: 220px;
       animation: floatUp 3s ease-in-out infinite alternate;
+      box-shadow: var(--shadow);
     }
+
     .floating-stat:nth-child(2) { animation-delay: 1s; }
     .floating-stat:nth-child(3) { animation-delay: 2s; }
-    @keyframes floatUp {
-      from { transform: translateY(0); }
-      to   { transform: translateY(-8px); }
+
+    @media (min-width: 1100px) {
+      .hero .container {
+        padding-right: 280px;
+      }
     }
+
     .fs-val { font-family: var(--font-display); font-size: 1.6rem; color: var(--orange); }
     .fs-lbl { font-size: 0.75rem; color: var(--text-muted); }
 
@@ -150,18 +160,6 @@
           </a>
         </div>
         <div class="hero-stats fade-in fade-in-delay-4">
-          <div>
-            <div class="hero-stat-value">2.4K+</div>
-            <div class="hero-stat-label">Active Volunteers</div>
-          </div>
-          <div>
-            <div class="hero-stat-value">180+</div>
-            <div class="hero-stat-label">NGOs Onboard</div>
-          </div>
-          <div>
-            <div class="hero-stat-value">95%</div>
-            <div class="hero-stat-label">Task Match Rate</div>
-          </div>
         </div>
       </div>
 
@@ -190,54 +188,6 @@
         <p style="color:var(--orange);font-size:0.8rem;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:12px;">Why Saarthi?</p>
         <h2 style="margin-bottom:16px;">Every Feature Built for Real Impact</h2>
         <p>From AI-powered matching to WhatsApp alerts — every tool is designed to eliminate friction between a volunteer and the person they can help.</p>
-      </div>
-
-      <div class="features-grid">
-        <div class="feature-card" style="--accent: var(--orange);">
-          <span class="feature-icon">🗺️</span>
-          <div class="feature-title">Geo-Based Auto Matching</div>
-          <div class="feature-desc">Automatically matches volunteers to tasks based on proximity, skills, and trust score. No more manual searching — the right volunteer, at the right place, instantly.</div>
-        </div>
-        <div class="feature-card" style="--accent: var(--cyan);">
-          <span class="feature-icon">🔥</span>
-          <div class="feature-title">Live Heatmaps & Clustering</div>
-          <div class="feature-desc">Visualize community problem density on an interactive map. Heatmaps reveal the most urgent areas at a glance — for both NGOs and coordinators.</div>
-        </div>
-        <div class="feature-card" style="--accent: var(--yellow);">
-          <span class="feature-icon">⚡</span>
-          <div class="feature-title">Task Failure Predictor</div>
-          <div class="feature-desc">AI predicts which tasks are at risk of missing deadlines based on volunteer assignment, time remaining, and proof-of-work status. Act before it's too late.</div>
-        </div>
-        <div class="feature-card" style="--accent: var(--green);">
-          <span class="feature-icon">📱</span>
-          <div class="feature-title">WhatsApp Notifications</div>
-          <div class="feature-desc">Real-time WhatsApp alerts when tasks are assigned, deadlines approach, or urgency is escalated. Volunteers stay informed without opening an app.</div>
-        </div>
-        <div class="feature-card" style="--accent: var(--purple);">
-          <span class="feature-icon">🛡️</span>
-          <div class="feature-title">Trust Score & Verified Badges</div>
-          <div class="feature-desc">Every volunteer has a trust score built from reviews, task history, and on-time completion. Verified badges signal the most reliable volunteers to NGOs.</div>
-        </div>
-        <div class="feature-card" style="--accent: var(--orange);">
-          <span class="feature-icon">📍</span>
-          <div class="feature-title">Inefficiency Detector</div>
-          <div class="feature-desc">Detects when volunteers travel significantly more than the optimal route and flags it for review — reducing wasted effort and improving resource allocation.</div>
-        </div>
-        <div class="feature-card" style="--accent: var(--cyan);">
-          <span class="feature-icon">📦</span>
-          <div class="feature-title">Resource Manager</div>
-          <div class="feature-desc">NGOs track physical resources (food, medicine, equipment) and allocate them directly to tasks. Know what you have and where it's being deployed.</div>
-        </div>
-        <div class="feature-card" style="--accent: var(--yellow);">
-          <span class="feature-icon">📸</span>
-          <div class="feature-title">Proof of Work Upload</div>
-          <div class="feature-desc">Volunteers submit photos, videos, or documents as proof of completion. NGOs approve/reject with one click. Full accountability built in.</div>
-        </div>
-        <div class="feature-card" style="--accent: var(--green);">
-          <span class="feature-icon">📊</span>
-          <div class="feature-title">Analytics Dashboard</div>
-          <div class="feature-desc">Rich analytics for NGOs: task completion rates, volunteer performance, resource utilization, and area-wise impact — all in one place.</div>
-        </div>
       </div>
     </div>
   </section>
@@ -296,7 +246,7 @@
         <div class="dot"></div>
         SAARTHI
       </div>
-      <p style="font-size:0.8rem;">Smart Resource Allocation for Social Impact · Built with ❤️ for communities</p>
+      <p style="font-size:0.8rem;">Smart Resource Allocation for Social Impact | Built by Executioners</p>
     </div>
   </footer>
 

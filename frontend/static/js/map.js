@@ -5,16 +5,24 @@
  */
 
 // ── Init Map ──────────────────────────────────────────────────
+const INDIA_BOUNDS = [[6.0, 68.0], [37.5, 98.0]];
+
 const map = L.map('map', {
-  center: [28.9845, 77.7064], // Default: Meerut, UP — will be overridden by geolocation
-  zoom:   13,
+  center: [22.9734, 78.6569],
+  zoom:   5,
+  minZoom: 4,
+  maxZoom: 12,
+  maxBounds: INDIA_BOUNDS,
+  maxBoundsViscosity: 1.0,
   zoomControl: true,
 });
 
 // Tile layer (dark-friendly OpenStreetMap)
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '© OpenStreetMap contributors',
-  maxZoom: 19,
+  maxZoom: 12,
+  noWrap: true,
+  bounds: INDIA_BOUNDS,
 }).addTo(map);
 
 // ── Layer groups ──────────────────────────────────────────────
@@ -358,7 +366,7 @@ function handleURLParams() {
 
   const lat = parseFloat(params.get('lat'));
   const lng = parseFloat(params.get('lng'));
-  if (lat && lng) {
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
     map.flyTo([lat, lng], 16);
   }
 }

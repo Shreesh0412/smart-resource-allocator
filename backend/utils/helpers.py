@@ -7,6 +7,7 @@ Miscellaneous helpers used across routes and services.
 import math
 import re
 from datetime import datetime
+import requests
 from bson import ObjectId
 from typing import Any, Dict, List, Optional
 from flask import current_app
@@ -68,6 +69,67 @@ def km_to_meters(km: float) -> float:
     return km * 1000.0
 
 
+# ── India pincode geocoding ───────────────────────────────────────────────────
+
+def normalize_pincode(pincode: str) -> str:
+    """Keep only 6 digits."""
+    digits = re.sub(r"\D", "", str(pincode or ""))
+    return digits if len(digits) == 6 else ""
+
+
+def geocode_pincode(pincode: str):
+    """Convert an Indian pincode to approximate lat/lng using Nominatim."""
+    pin = normalize_pincode(pincode)
+    if not pin:
+        return None, None
+    try:
+        resp = requests.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={"format": "jsonv2", "postalcode": pin, "countrycodes": "in", "limit": 1},
+            headers={"User-Agent": "Saarthi/1.0 (hackathon project)"},
+            timeout=8,
+        )
+        resp.raise_for_status()
+        results = resp.json() or []
+        if not results:
+            resp = requests.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={"format": "jsonv2", "q": f"{pin}, India", "countrycodes": "in", "limit": 1},
+                headers={"User-Agent": "Saarthi/1.0 (hackathon project)"},
+                timeout=8,
+            )
+            resp.raise_for_status()
+            results = resp.json() or []
+        if results:
+            return float(results[0]["lat"]), float(results[0]["lon"])
+    except Exception:
+        pass
+    return None, None
+
+
+def resolve_location_payload(payload: Dict, *, require_pincode: bool = False):
+    """Resolve location from pincode first; fall back to explicit lat/lng if present."""
+    pincode = normalize_pincode(payload.get("pincode", ""))
+    if pincode:
+        lat, lng = geocode_pincode(pincode)
+        if lat is not None and lng is not None:
+            return {"lat": lat, "lng": lng, "pincode": pincode}
+        if require_pincode:
+            return {"error": "Could not resolve the provided pincode. Please enter a valid Indian pincode."}
+
+    lat = payload.get("lat")
+    lng = payload.get("lng")
+    if lat is not None and lng is not None:
+        try:
+            return {"lat": float(lat), "lng": float(lng), "pincode": pincode}
+        except Exception:
+            pass
+
+    if require_pincode:
+        return {"error": "Please provide a valid Indian pincode."}
+    return {"lat": None, "lng": None, "pincode": pincode}
+
+
 # ── Task Urgency ───────────────────────────────────────────────────────────────
 
 def compute_urgency_from_deadline(deadline_iso: str) -> str:
@@ -98,6 +160,14 @@ def days_remaining(deadline_iso: str) -> int:
         return max(0, (deadline - datetime.utcnow()).days)
     except Exception:
         return 0
+
+
+def is_past_deadline(deadline_iso: str) -> bool:
+    try:
+        deadline = datetime.fromisoformat(deadline_iso)
+        return deadline < datetime.utcnow()
+    except Exception:
+        return False
 
 
 # ── File Upload ────────────────────────────────────────────────────────────────

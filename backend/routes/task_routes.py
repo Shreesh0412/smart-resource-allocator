@@ -7,8 +7,9 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import get_jwt_identity, get_jwt
 from bson import ObjectId
 
-from utils.helpers import serialize, serialize_list, to_oid, haversine_km
+from utils.helpers import serialize, serialize_list, to_oid, haversine_km, is_past_deadline
 from utils.decorators import any_authenticated, ngo_required
+from models.schemas import utcnow
 
 task_bp = Blueprint("tasks", __name__)
 
@@ -51,7 +52,7 @@ def search_tasks():
     if ttype:   query["task_type"] = ttype
     if q:       query["$text"]     = {"$search": q}
 
-    if lat and lng:
+    if lat is not None and lng is not None:
         query["location"] = {
             "$near": {
                 "$geometry":    {"type": "Point", "coordinates": [lng, lat]},
@@ -61,7 +62,7 @@ def search_tasks():
 
     tasks = list(db.tasks.find(query).skip((page - 1) * per_page).limit(per_page))
 
-    if lat and lng:
+    if lat is not None and lng is not None:
         for t in tasks:
             t["distance_km"] = round(haversine_km(lat, lng, t["lat"], t["lng"]), 2)
 
@@ -100,16 +101,16 @@ def urgency_board():
 def mark_complete(task_id):
     db    = current_app.db
     nid   = get_jwt_identity()            # plain string — FIXED
-    data  = request.get_json() or {}
+    data  = request.get_json(silent=True) or {}
 
     task = db.tasks.find_one({"_id": to_oid(task_id), "ngo_id": nid})
     if not task:
         return jsonify({"error": "Task not found or not yours"}), 404
 
-    from utils.helpers import days_remaining
-    from models.schemas import utcnow
+    if task.get("status") == "completed":
+        return jsonify({"message": "Task already completed"}), 200
 
-    is_ontime = days_remaining(task.get("deadline", "")) >= 0
+    is_ontime = not is_past_deadline(task.get("deadline", ""))
 
     db.tasks.update_one(
         {"_id": to_oid(task_id)},
@@ -120,20 +121,21 @@ def mark_complete(task_id):
             "updated_at":       utcnow(),
         }}
     )
-    db.ngos.update_one({"_id": ObjectId(nid)},
-                        {"$inc": {"total_tasks_completed": 1, "active_volunteers": -1}})
+    db.ngos.update_one({"_id": ObjectId(nid)}, {"$inc": {"total_tasks_completed": 1}})
 
     from services.trust_score import update_trust_score
-    for vol_id in task.get("assigned_volunteers", []):
+    assigned_ids = [str(v) for v in task.get("assigned_volunteers", [])]
+    inc_field = "tasks_on_time" if is_ontime else "tasks_late"
+
+    for vol_id in assigned_ids:
         event = "ontime" if is_ontime else "late"
-        update_trust_score(db, str(vol_id), event=event)
+        update_trust_score(db, vol_id, event=event)
         db.volunteers.update_one(
             {"_id": ObjectId(vol_id)},
             {
-                "$inc": {"total_tasks_done": 1,
-                         ("tasks_on_time" if is_ontime else "tasks_late"): 1},
+                "$inc": {"total_tasks_done": 1, inc_field: 1},
                 "$set": {"active_task_id": None},
-                "$push":{"task_history": task_id}
+                "$push": {"task_history": task_id}
             }
         )
 
@@ -147,13 +149,13 @@ def mark_complete(task_id):
 def cancel_task(task_id):
     db   = current_app.db
     nid  = get_jwt_identity()             # plain string — FIXED
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
 
     task = db.tasks.find_one({"_id": to_oid(task_id), "ngo_id": nid})
     if not task:
         return jsonify({"error": "Task not found"}), 404
 
-    from models.schemas import utcnow, notification_schema
+    from models.schemas import notification_schema
     db.tasks.update_one(
         {"_id": to_oid(task_id)},
         {"$set": {"status": "cancelled", "updated_at": utcnow(),

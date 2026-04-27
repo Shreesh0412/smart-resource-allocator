@@ -161,26 +161,6 @@ function riskIcon(r) {
   return r === 'on_track' ? '✅' : r === 'at_risk' ? '⚠️' : '🚨';
 }
 
-// ── Post Task ─────────────────────────────────────────────────
-async function detectTaskLocation() {
-  try {
-    showToast('Detecting location…', 'info');
-    const loc = await getUserLocation();
-    document.getElementById('t-lat').value = loc.lat.toFixed(6);
-    document.getElementById('t-lng').value = loc.lng.toFixed(6);
-    showToast('Location detected!', 'success');
-  } catch(e) {
-    // Fall back to NGO's registered location
-    try {
-      const profile = await api.getNGOProfile();
-      document.getElementById('t-lat').value = profile.lat?.toFixed(6) || '';
-      document.getElementById('t-lng').value = profile.lng?.toFixed(6) || '';
-      showToast('Using your NGO\'s registered location', 'info');
-    } catch(err) {
-      showToast('Could not detect location. Enter manually.', 'error');
-    }
-  }
-}
 
 function toggleSkill(el) {
   const on = el.classList.toggle('selected');
@@ -206,8 +186,7 @@ async function postTask(e) {
       urgency:           document.getElementById('t-urgency').value || undefined,
       deadline:          document.getElementById('t-deadline').value,
       address:           document.getElementById('t-address').value,
-      lat:               parseFloat(document.getElementById('t-lat').value),
-      lng:               parseFloat(document.getElementById('t-lng').value),
+      pincode:           document.getElementById('t-pincode').value.trim(),
       required_skills:   getSelectedSkills(),
     };
 

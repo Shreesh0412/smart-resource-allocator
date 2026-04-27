@@ -92,8 +92,9 @@ async function tryRefresh() {
 // ── Core fetch wrapper ────────────────────────────────────────
 async function apiFetch(path, options = {}, _retried = false) {
   const token = Auth.getToken();
+  const hasBody = options.body !== undefined && options.body !== null;
   const headers = {
-    'Content-Type': 'application/json',
+    ...(hasBody && !(options.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
     ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
     ...(options.headers || {})
   };
