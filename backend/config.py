@@ -8,6 +8,7 @@ from datetime import timedelta
 
 
 class Config:
+    GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
     # ── Core ──────────────────────────────────────────────────────────────────
     SECRET_KEY        = os.environ.get("SECRET_KEY", "dev-secret-change-in-prod")
     DEBUG             = os.environ.get("DEBUG", "true").lower() == "true"
