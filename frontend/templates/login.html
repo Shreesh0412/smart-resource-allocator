@@ -11,14 +11,14 @@
 
   <div class="auth-page">
     <div style="width:100%;max-width:480px;position:relative;z-index:2;">
-      <!-- Back link -->
+      
       <a href="/index.html" style="color:var(--text-muted);font-size:0.85rem;display:flex;align-items:center;gap:6px;margin-bottom:24px;">
         ← Back to Home
       </a>
 
       <div class="auth-card fade-in">
         <div class="auth-logo">SAARTHI</div>
-        <p class="auth-subtitle" id="auth-subtitle">Welcome back. Sign in to continue.</p>
+        <p class="auth-subtitle">Welcome back. Sign in to continue.</p>
 
         <!-- Role Toggle -->
         <div class="auth-toggle">
@@ -31,18 +31,21 @@
         </div>
 
         <!-- Login Form -->
-        <form id="login-form" onsubmit="handleLogin(event)">
+        <form onsubmit="handleLogin(event)">
           <div style="display:flex;flex-direction:column;gap:16px;">
             <div class="form-group">
               <label class="form-label">Email</label>
-              <input type="email" id="email" class="form-input" placeholder="you@example.com" required>
+              <input type="email" id="email" class="form-input" required>
             </div>
+
             <div class="form-group">
               <label class="form-label">Password</label>
-              <input type="password" id="password" class="form-input" placeholder="••••••••" required>
+              <input type="password" id="password" class="form-input" required>
             </div>
           </div>
+
           <div id="login-error" class="form-error mt-2" style="display:none;"></div>
+
           <button type="submit" class="btn btn-primary btn-full mt-6" id="login-btn">
             Sign In
           </button>
@@ -52,59 +55,58 @@
         <a href="/signup.html" class="btn btn-secondary btn-full">Create Account</a>
 
         <div class="auth-footer">
-          Community member? <a href="/report-problem.html">Report a problem</a> without logging in.
+          Community member? <a href="/report-problem.html">Report a problem</a>
         </div>
       </div>
     </div>
   </div>
 
-  <div id="toast-container"></div>
   <script src="/static/js/api.js"></script>
+
   <script>
     let currentRole = 'volunteer';
 
-    // Pre-select role from URL
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('type') === 'ngo') setRole('ngo');
-
-    // Redirect if already logged in
     if (Auth.isLoggedIn()) Auth.redirect();
 
     function setRole(role) {
       currentRole = role;
       document.getElementById('toggle-volunteer').classList.toggle('active', role === 'volunteer');
       document.getElementById('toggle-ngo').classList.toggle('active', role === 'ngo');
-      document.getElementById('auth-subtitle').textContent =
-        role === 'volunteer' ? 'Welcome back, volunteer. Sign in to continue.' : 'NGO portal — sign in to manage tasks.';
     }
 
     async function handleLogin(e) {
       e.preventDefault();
-      const btn   = document.getElementById('login-btn');
-      const errEl = document.getElementById('login-error');
-      const email    = document.getElementById('email').value;
+
+      const btn = document.getElementById('login-btn');
+      const err = document.getElementById('login-error');
+
+      err.style.display = 'none';
+      btn.disabled = true;
+      btn.textContent = 'Signing in...';
+
+      const email = document.getElementById('email').value;
       const password = document.getElementById('password').value;
 
-      btn.disabled = true;
-      btn.textContent = 'Signing in…';
-      errEl.style.display = 'none';
-
       try {
-        let data;
-        if (currentRole === 'volunteer') {
-          data = await api.volunteerLogin(email, password);
-          Auth.save({ ...data, type: 'volunteer', name: data.name });
-          showToast(`Welcome back, ${data.name}!`, 'success');
-          setTimeout(() => window.location.href = '/volunteer-dashboard.html', 800);
-        } else {
-          data = await api.ngoLogin(email, password);
-          Auth.save({ ...data, type: 'ngo', name: data.name });
-          showToast(`Welcome back, ${data.name}!`, 'success');
-          setTimeout(() => window.location.href = '/ngo-dashboard.html', 800);
-        }
-      } catch(err) {
-        errEl.textContent = err.message || 'Login failed. Check your credentials.';
-        errEl.style.display = 'block';
+        // ✅ FIXED API CALL
+        const data = currentRole === 'volunteer'
+          ? await api.volunteerLogin(email, password)
+          : await api.ngoLogin(email, password);
+
+        Auth.save({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+          id: data.id,
+          type: data.type,
+          name: data.name
+        });
+
+        Auth.redirect();
+
+      } catch (e) {
+        err.textContent = e.message;
+        err.style.display = 'block';
+      } finally {
         btn.disabled = false;
         btn.textContent = 'Sign In';
       }

@@ -34,10 +34,11 @@ function showPanel(name) {
 // ── Overview ──────────────────────────────────────────────────
 async function loadOverview() {
   try {
-    const [profile, stats] = await Promise.all([
-      api.getVolunteerProfile(),
-      api.getVolunteerStats()
-    ]);
+    let profile = {};
+let stats = {};
+
+try { profile = await api.getVolunteerProfile(); } catch {}
+try { stats = await api.getVolunteerStats(); } catch {}
 
     document.getElementById('avatar').textContent       = initials(profile.name);
     document.getElementById('profile-name').textContent = profile.name;

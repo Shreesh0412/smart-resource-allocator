@@ -98,7 +98,7 @@ async function loadOverview() {
     document.getElementById('ov-urgent').textContent = urgent;
 
     // Check pending reports
-    const reports = await api.getPendingReports();
+    const reports = await json('/ngo/reports')
     const pending = (reports.reports || []).length;
     if (pending > 0) {
       const badge = document.getElementById('reports-count');
@@ -343,7 +343,7 @@ async function loadReports() {
   const el = document.getElementById('reports-list');
   el.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
   try {
-    const data = await api.getPendingReports();
+    const data = await json('/ngo/reports')
     if (!data.reports?.length) {
       el.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>No pending reports in your area.</p></div>';
       return;

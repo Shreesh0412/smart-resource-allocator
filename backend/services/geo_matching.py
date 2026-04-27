@@ -1,22 +1,3 @@
-"""
-services/geo_matching.py
-------------------------
-★ Geo-based Auto Matching  (from your notes)
-
-Core intelligence layer — matches volunteers to tasks using:
-  1. Proximity   (MongoDB $near geospatial query)
-  2. Skill match (intersection of required vs. volunteer skills)
-  3. Trust score (higher trust → higher rank)
-  4. Availability
-  5. Workload    (no active task = bonus)
-  6. Distance    (closer = higher score)
-
-Exposes:
-  auto_match_volunteers(db, task_id, config)  → list of volunteer_ids
-  get_best_volunteers_for_task(db, task, config, top_n) → scored list
-  get_ai_suggestions_for_volunteer(db, volunteer, config) → scored task list
-"""
-
 from bson import ObjectId
 from utils.helpers import haversine_km, km_to_meters
 
@@ -64,12 +45,12 @@ def get_best_volunteers_for_task(db, task, config, top_n: int = 10):
     task_lat  = task["lat"]
     task_lng  = task["lng"]
 
-    # 1. Geo query — active volunteers within radius with no active task priority
+    # 1. Geo query — active volunteers within radius
     candidates = list(db.volunteers.find({
         "status": "active",
         "location": {
             "$near": {
-                "$geometry":    {"type": "Point", "coordinates": [task_lng, task_lat]},
+                "$geometry": {"type": "Point", "coordinates": [task_lng, task_lat]},
                 "$maxDistance": km_to_meters(radius_km),
             }
         }
@@ -81,7 +62,7 @@ def get_best_volunteers_for_task(db, task, config, top_n: int = 10):
             "status": "active",
             "location": {
                 "$near": {
-                    "$geometry":    {"type": "Point", "coordinates": [task_lng, task_lat]},
+                    "$geometry": {"type": "Point", "coordinates": [task_lng, task_lat]},
                     "$maxDistance": km_to_meters(config.get("MAX_MATCH_RADIUS_KM", 50)),
                 }
             }
@@ -94,15 +75,15 @@ def get_best_volunteers_for_task(db, task, config, top_n: int = 10):
         score, breakdown = _score_volunteer(vol, task, required_skills, radius_km)
         dist = haversine_km(task_lat, task_lng, vol["lat"], vol["lng"])
         scored.append({
-            "volunteer_id":  str(vol["_id"]),
-            "name":          vol.get("name", ""),
-            "phone":         vol.get("phone", ""),
-            "trust_score":   vol.get("trust_score", 50),
-            "verified_badge":vol.get("verified_badge", False),
-            "distance_km":   round(dist, 2),
-            "score":         score,
-            "score_pct":     round(score / SCORE_MAX * 100, 1),
-            "breakdown":     breakdown,
+            "volunteer_id": str(vol["_id"]),
+            "name": vol.get("name", ""),
+            "phone": vol.get("phone", ""),
+            "trust_score": vol.get("trust_score", 50),
+            "verified_badge": vol.get("verified_badge", False),
+            "distance_km": round(dist, 2),
+            "score": score,
+            "score_pct": round(score / SCORE_MAX * 100, 1),
+            "breakdown": breakdown,
         })
 
     scored.sort(key=lambda x: x["score"], reverse=True)
@@ -114,17 +95,16 @@ def _score_volunteer(vol, task, required_skills: set, radius_km: float):
 
     # ── Proximity score (40 pts) ──────────────────────────────────────────────
     dist = haversine_km(task["lat"], task["lng"], vol["lat"], vol["lng"])
-    # Linear decay: 0 km → 40pts, radius_km+ → 0pts
     proximity_score = max(0.0, W_PROXIMITY * (1 - dist / max(radius_km, 1)))
     breakdown["proximity"] = round(proximity_score, 1)
 
     # ── Skill match score (25 pts) ────────────────────────────────────────────
     vol_skills = set(vol.get("skills", []))
     if required_skills:
-        overlap     = len(required_skills & vol_skills)
+        overlap = len(required_skills & vol_skills)
         skill_score = (overlap / len(required_skills)) * W_SKILL
     else:
-        skill_score = W_SKILL * 0.5    # no requirements = neutral
+        skill_score = W_SKILL * 0.5
     breakdown["skill"] = round(skill_score, 1)
 
     # ── Trust score (20 pts) ──────────────────────────────────────────────────
@@ -152,46 +132,115 @@ def _score_volunteer(vol, task, required_skills: set, radius_km: float):
 def get_ai_suggestions_for_volunteer(db, volunteer, config, top_n: int = 5):
     """
     Given a volunteer, find and rank the open tasks that best suit them.
-    Mirror of get_best_volunteers_for_task but from the volunteer's perspective.
+    Includes fallbacks so the UI still shows useful tasks when geo filters
+    or skill filters are too strict.
     """
     radius_km = config.get("DEFAULT_MATCH_RADIUS_KM", 10)
-    vol_lat   = volunteer["lat"]
-    vol_lng   = volunteer["lng"]
+    max_radius_km = config.get("MAX_MATCH_RADIUS_KM", 50)
 
-    # Geo query for nearby open tasks
-    open_tasks = list(db.tasks.find({
-        "status":   "open",
+    vol_lat = volunteer.get("lat")
+    vol_lng = volunteer.get("lng")
+
+    # If the volunteer has no location yet, still return open tasks with neutral scoring.
+    if vol_lat is None or vol_lng is None:
+        fallback_tasks = list(db.tasks.find({"status": "open"}).limit(top_n))
+        return [_serialize_task_with_neutral_score(t) for t in fallback_tasks]
+
+    vol_skills = set(volunteer.get("skills", []))
+    urgency_weight = {"urgent": 15, "med": 8, "low": 0}
+    scored = []
+
+    def _score_tasks(tasks, use_distance_filter=True):
+        local_scored = []
+        for task in tasks:
+            try:
+                task_lat = task.get("lat")
+                task_lng = task.get("lng")
+                if task_lat is None or task_lng is None:
+                    continue
+
+                dist = haversine_km(vol_lat, vol_lng, task_lat, task_lng)
+
+                if use_distance_filter and dist > max_radius_km:
+                    continue
+
+                prox = max(0.0, 40 * (1 - dist / max(radius_km, 1)))
+
+                req = set(task.get("required_skills", []))
+                if req:
+                    skill = (len(req & vol_skills) / len(req)) * 25
+                else:
+                    skill = 12.5
+
+                urg = urgency_weight.get(task.get("urgency", "low"), 0)
+                total = round(prox + skill + urg, 2)
+
+                local_scored.append({
+                    **{
+                        k: str(v) if isinstance(v, ObjectId) else v
+                        for k, v in task.items()
+                        if k != "_id"
+                    },
+                    "_id": str(task["_id"]),
+                    "distance_km": round(dist, 2),
+                    "match_score": total,
+                    "match_pct": round(total / 80 * 100, 1),  # 80 = practical max
+                })
+            except Exception:
+                continue
+        return local_scored
+
+    # 1) Nearby open tasks via geo query
+    nearby_tasks = list(db.tasks.find({
+        "status": "open",
         "location": {
             "$near": {
-                "$geometry":    {"type": "Point", "coordinates": [vol_lng, vol_lat]},
+                "$geometry": {"type": "Point", "coordinates": [vol_lng, vol_lat]},
                 "$maxDistance": km_to_meters(radius_km),
             }
         }
     }))
 
-    vol_skills = set(volunteer.get("skills", []))
+    scored = _score_tasks(nearby_tasks)
 
-    urgency_weight = {"urgent": 15, "med": 8, "low": 0}
-    scored = []
+    # 2) Expand radius once if nothing matched
+    if not scored:
+        expanded_tasks = list(db.tasks.find({
+            "status": "open",
+            "location": {
+                "$near": {
+                    "$geometry": {"type": "Point", "coordinates": [vol_lng, vol_lat]},
+                    "$maxDistance": km_to_meters(max_radius_km),
+                }
+            }
+        }))
+        scored = _score_tasks(expanded_tasks)
 
-    for task in open_tasks:
-        dist  = haversine_km(vol_lat, vol_lng, task["lat"], task["lng"])
-        prox  = max(0.0, 40 * (1 - dist / max(radius_km, 1)))
+    # 3) Final fallback: all open tasks, even if geo index/matching gives nothing
+    if not scored:
+        all_open_tasks = list(db.tasks.find({"status": "open"}).limit(50))
+        scored = _score_tasks(all_open_tasks, use_distance_filter=False)
 
-        req   = set(task.get("required_skills", []))
-        skill = (len(req & vol_skills) / len(req) * 25) if req else 12.5
-
-        urg   = urgency_weight.get(task.get("urgency", "low"), 0)
-        total = round(prox + skill + urg, 2)
-
-        scored.append({
-            **{k: str(v) if isinstance(v, ObjectId) else v
-               for k, v in task.items() if k != "_id"},
-            "_id":         str(task["_id"]),
-            "distance_km": round(dist, 2),
-            "match_score": total,
-            "match_pct":   round(total / 80 * 100, 1),  # 80 = max possible
-        })
+    # 4) Absolute fallback: if still nothing, return a neutral task list for the UI
+    if not scored:
+        fallback_tasks = list(db.tasks.find({"status": "open"}).limit(top_n))
+        return [_serialize_task_with_neutral_score(t) for t in fallback_tasks]
 
     scored.sort(key=lambda x: x["match_score"], reverse=True)
     return scored[:top_n]
+
+
+def _serialize_task_with_neutral_score(task):
+    """
+    Fallback serializer for tasks when scoring is unavailable.
+    """
+    data = {
+        k: str(v) if isinstance(v, ObjectId) else v
+        for k, v in task.items()
+        if k != "_id"
+    }
+    data["_id"] = str(task["_id"])
+    data["distance_km"] = None
+    data["match_score"] = 50
+    data["match_pct"] = 62.5
+    return data

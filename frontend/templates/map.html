@@ -4,187 +4,148 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Live Map — Saarthi</title>
+
   <link rel="stylesheet" href="/static/css/main.css">
 
-  <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
-  <!-- Leaflet Heat plugin -->
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+
+  <!-- Marker Cluster -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css">
+  <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+
+  <!-- Heatmap -->
+  <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
 
   <style>
     body { overflow: hidden; }
+
     #map {
       position: fixed;
       top: var(--nav-h);
-      left: 0; right: 0;
+      left: 0;
+      right: 0;
       bottom: 0;
+      z-index: 1;
     }
 
-    /* Override Leaflet tiles for dark theme */
-    .leaflet-tile { filter: brightness(0.75) saturate(0.7) hue-rotate(180deg); }
-
-    /* Controls panel */
     #map-panel {
       position: fixed;
       top: calc(var(--nav-h) + 16px);
       left: 16px;
-      z-index: 1000;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      width: 210px;
+      z-index: 9999;
+      width: 260px;
+      background: rgba(10,15,30,0.9);
+      backdrop-filter: blur(18px);
+      border-radius: 16px;
+      padding: 14px;
     }
-    .map-btn {
-      background: rgba(15,22,41,0.92);
-      backdrop-filter: blur(12px);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      color: var(--text);
-      padding: 9px 14px;
-      font-size: 0.82rem;
-      font-weight: 600;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      transition: all 150ms;
-    }
-    .map-btn:hover  { border-color: var(--orange); color: var(--orange); }
-    .map-btn.active { background: rgba(255,87,34,0.2); border-color: var(--orange); color: var(--orange); }
 
-    /* Legend */
+    .map-btn {
+      width: 100%;
+      padding: 12px;
+      border-radius: 12px;
+      border: none;
+      background: #1a1f35;
+      color: #fff;
+      cursor: pointer;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .map-btn:hover {
+      background: #ff5722;
+    }
+
+    .map-btn.active {
+      background: #ff5722;
+    }
+
     #map-legend {
       position: fixed;
-      bottom: 24px;
-      left: 16px;
-      z-index: 1000;
-      background: rgba(15,22,41,0.92);
-      backdrop-filter: blur(12px);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 14px 18px;
-      min-width: 180px;
-    }
-    .legend-title { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-dim); margin-bottom: 10px; }
-    .legend-row   { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; margin-bottom: 6px; }
-    .legend-dot   { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-
-    /* Task sidebar */
-    #task-sidebar {
-      position: fixed;
-      top: var(--nav-h);
-      right: 0;
-      width: 320px;
-      height: calc(100vh - var(--nav-h));
-      background: rgba(15,22,41,0.95);
-      backdrop-filter: blur(16px);
-      border-left: 1px solid var(--border);
-      padding: 20px;
-      z-index: 1000;
-      overflow-y: auto;
-      transform: translateX(100%);
-      transition: transform var(--anim);
-    }
-    #task-sidebar.open { transform: translateX(0); }
-    #sidebar-close {
-      position: absolute;
-      top: 16px; right: 16px;
-      background: none; border: none;
-      color: var(--text-muted); font-size: 1.1rem;
-      cursor: pointer;
+      top: calc(var(--nav-h) + 16px);
+      right: 16px;
+      z-index: 9999;
+      background: rgba(10,15,30,0.9);
+      padding: 12px;
+      border-radius: 10px;
     }
 
-    /* Stats bar */
     #map-stats {
       position: fixed;
-      bottom: 24px;
-      right: 24px;
-      z-index: 1000;
-      display: flex;
-      gap: 10px;
+      bottom: 20px;
+      right: 20px;
+      z-index: 9999;
     }
+
     .map-stat {
-      background: rgba(15,22,41,0.92);
-      backdrop-filter: blur(12px);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      padding: 10px 16px;
-      text-align: center;
+      background: rgba(10,15,30,0.95);
+      padding: 10px;
+      border-radius: 10px;
     }
-    .map-stat-val { font-family: var(--font-display); font-size: 1.3rem; color: var(--orange); }
-    .map-stat-lbl { font-size: 0.68rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+
+    .leaflet-container {
+      z-index: 1 !important;
+    }
   </style>
 </head>
+
 <body>
-  <!-- Navbar -->
+
+  <!-- NAVBAR -->
   <nav class="navbar">
     <div class="container">
-      <a href="/index.html" class="nav-brand"><div class="dot"></div>SAARTHI</a>
-      <div class="nav-links">
-        <span id="map-mode-label" style="font-size:0.8rem;color:var(--cyan);">Live Map</span>
-        <a href="javascript:history.back()" class="btn btn-secondary btn-sm">← Back</a>
-      </div>
+      <a href="/index.html" class="nav-brand">SAARTHI</a>
     </div>
   </nav>
 
-  <!-- Map -->
+  <!-- MAP -->
   <div id="map"></div>
 
-  <!-- Controls -->
+  <!-- CONTROL PANEL -->
   <div id="map-panel">
-    <div style="font-size:0.65rem;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:var(--text-dim);padding:0 4px;">Layers</div>
-    <button class="map-btn active" id="btn-tasks"       onclick="toggleLayer('tasks')">       📌 Task Pins</button>
-    <button class="map-btn active" id="btn-heatmap"     onclick="toggleLayer('heatmap')">     🔥 Heatmap</button>
-    <button class="map-btn"        id="btn-volunteers"  onclick="toggleLayer('volunteers')">  🙋 Volunteers</button>
-    <button class="map-btn"        id="btn-routes"      onclick="toggleLayer('routes')">      🗺️ Routes</button>
-    <button class="map-btn"        id="btn-problems"    onclick="toggleLayer('problems')">    📣 Reports</button>
-    <button class="map-btn"        id="btn-ngos"        onclick="toggleLayer('ngos')">        🏢 NGOs</button>
-    <div style="font-size:0.65rem;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:var(--text-dim);padding:0 4px;margin-top:8px;">Filter</div>
-    <select id="urgency-filter" class="form-input" style="font-size:0.82rem;padding:8px 12px;" onchange="applyFilters()">
-      <option value="">All Urgency</option>
-      <option value="urgent">🔴 Urgent</option>
-      <option value="med">🟡 Medium</option>
-      <option value="low">🟢 Low</option>
-    </select>
-    <button class="map-btn" onclick="refreshAll()" style="margin-top:4px;">🔄 Refresh All</button>
+
+    <button id="taskBtn" class="map-btn active" onclick="toggleTasks()">📍 Tasks</button>
+    <button id="heatBtn" class="map-btn" onclick="toggleHeatmap()">🔥 Heatmap</button>
+
+    <div style="margin-top:10px;">
+      <select id="filter-urgency" class="map-btn">
+        <option value="">All Urgency</option>
+        <option value="urgent">🔴 Urgent</option>
+        <option value="med">🟡 Medium</option>
+        <option value="low">🟢 Low</option>
+      </select>
+
+      <select id="filter-type" class="map-btn">
+        <option value="">All Types</option>
+        <option value="education">Education</option>
+        <option value="health">Health</option>
+        <option value="food">Food</option>
+        <option value="rescue">Rescue</option>
+      </select>
+    </div>
+
   </div>
 
-  <!-- Legend -->
+  <!-- LEGEND -->
   <div id="map-legend">
-    <div class="legend-title">Legend</div>
-    <div class="legend-row"><div class="legend-dot" style="background:#f44336;"></div>Urgent task</div>
-    <div class="legend-row"><div class="legend-dot" style="background:#ffc107;"></div>Medium task</div>
-    <div class="legend-row"><div class="legend-dot" style="background:#4caf50;"></div>Low task</div>
-    <div class="legend-row"><div class="legend-dot" style="background:#00bcd4;"></div>Volunteer</div>
-    <div class="legend-row"><div class="legend-dot" style="background:#ff5722;"></div>NGO</div>
-    <div class="legend-row"><div class="legend-dot" style="background:#7c4dff;"></div>Problem report</div>
+    🔴 Urgent <br>
+    🟡 Medium <br>
+    🟢 Low
   </div>
 
-  <!-- Stats bar -->
+  <!-- STATS -->
   <div id="map-stats">
     <div class="map-stat">
-      <div class="map-stat-val" id="stat-open">—</div>
-      <div class="map-stat-lbl">Open Tasks</div>
-    </div>
-    <div class="map-stat">
-      <div class="map-stat-val" id="stat-urgent" style="color:var(--red);">—</div>
-      <div class="map-stat-lbl">Urgent</div>
-    </div>
-    <div class="map-stat">
-      <div class="map-stat-val" id="stat-vols" style="color:var(--cyan);">—</div>
-      <div class="map-stat-lbl">Volunteers</div>
+      Tasks: <span id="count">0</span>
     </div>
   </div>
 
-  <!-- Task Sidebar -->
-  <div id="task-sidebar">
-    <button id="sidebar-close" onclick="closeSidebar()">✕</button>
-    <div id="sidebar-content"></div>
-  </div>
-
-  <div id="toast-container"></div>
+  <!-- SCRIPTS (ORDER IS IMPORTANT) -->
   <script src="/static/js/api.js"></script>
   <script src="/static/js/map.js"></script>
+
 </body>
 </html>

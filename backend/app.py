@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 
 import certifi
-from flask import Flask, jsonify, render_template, redirect, url_for, send_from_directory
+from flask import Flask, jsonify, render_template, redirect, url_for, send_from_directory, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from pymongo import MongoClient, GEOSPHERE
@@ -34,6 +34,10 @@ jwt = JWTManager(app)
 client = MongoClient(app.config["MONGO_URI"], tlsCAFile=certifi.where())
 db = client[app.config["DB_NAME"]]
 app.db = db
+
+def _is_api_call():
+    # Frontend fetches send this header; direct browser navigation does not.
+    return request.headers.get("X-Requested-With") == "XMLHttpRequest"
 
 def create_indexes():
     db.tasks.create_index([("location", GEOSPHERE)])
@@ -72,17 +76,23 @@ app.register_blueprint(admin_bp,     url_prefix="/api/admin")
 
 @jwt.unauthorized_loader
 def missing_token(reason):
-    return jsonify({"error": "Missing or invalid token", "reason": reason}), 401
+    if _is_api_call():
+        return jsonify({"error": "Missing or invalid token", "reason": reason}), 401
+    return redirect(url_for("login_page")), 302
 
 
 @jwt.expired_token_loader
 def expired_token(jwt_header, jwt_payload):
-    return jsonify({"error": "Token has expired"}), 401
+    if _is_api_call():
+        return jsonify({"error": "Token has expired"}), 401
+    return redirect(url_for("login_page")), 302
 
 
 @jwt.invalid_token_loader
 def invalid_token(reason):
-    return jsonify({"error": "Invalid token", "reason": reason}), 422
+    if _is_api_call():
+        return jsonify({"error": "Invalid token", "reason": reason}), 422
+    return redirect(url_for("login_page")), 302
 
 
 # ── Frontend Pages ────────────────────────────────────────────────────────

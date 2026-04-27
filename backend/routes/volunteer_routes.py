@@ -85,8 +85,14 @@ def available_tasks():
     db   = current_app.db
     volunteer, vid = _current_volunteer()
 
-    lat       = float(request.args.get("lat", volunteer["lat"]))
-    lng       = float(request.args.get("lng", volunteer["lng"]))
+    lat = float(request.args.get("lat") or volunteer.get("lat", 0))
+    lng = float(request.args.get("lng") or volunteer.get("lng", 0))
+
+    if not lat or not lng:
+        return jsonify({
+            "tasks": [],
+            "message": "Location not set. Please update profile."
+        }), 200
     radius_km = float(request.args.get("radius_km", current_app.config["DEFAULT_MATCH_RADIUS_KM"]))
     urgency   = request.args.get("urgency")
     task_type = request.args.get("task_type")
@@ -352,18 +358,6 @@ def my_stats():
     }), 200
 
 
-# ── AI Suggestions ────────────────────────────────────────────────────────────
-
-@volunteer_bp.route("/ai-suggestions", methods=["GET"])
-@volunteer_required
-def ai_suggestions():
-    db = current_app.db
-    volunteer, _ = _current_volunteer()
-
-    from services.geo_matching import get_ai_suggestions_for_volunteer
-    suggestions = get_ai_suggestions_for_volunteer(db, volunteer, current_app.config)
-    return jsonify({"suggestions": serialize_list(suggestions)}), 200
-
 
 # ── Notifications ─────────────────────────────────────────────────────────────
 
@@ -390,3 +384,23 @@ def _notify(db, recipient_id, recipient_type, title, message, notif_type, ref_id
     from models.schemas import notification_schema
     doc = notification_schema(recipient_id, recipient_type, title, message, notif_type, ref_id)
     db.notifications.insert_one(doc)
+# ── AI Suggestions ─────────────────────────────────────────────
+
+@volunteer_bp.route("/ai-suggestions", methods=["GET"])
+@volunteer_required
+def ai_suggestions():
+    db = current_app.db
+    volunteer, vid = _current_volunteer()
+
+    if not volunteer:
+        return jsonify({"tasks": []}), 200
+
+    from services.geo_matching import get_ai_suggestions_for_volunteer
+
+    suggestions = get_ai_suggestions_for_volunteer(
+        db,
+        volunteer,
+        current_app.config
+    )
+
+    return jsonify({"suggestions": suggestions}), 200
