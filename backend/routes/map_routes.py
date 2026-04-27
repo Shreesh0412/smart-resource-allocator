@@ -121,6 +121,7 @@ def task_geojson():
                 "urgency":     t.get("urgency", "low"),
                 "status":      t.get("status", "open"),
                 "deadline":    t.get("deadline", ""),
+                "description": t.get("description", ""),
                 "address":     t.get("address", ""),
                 "volunteers_needed":  t.get("volunteers_needed", 1),
                 "assigned_count":     len(t.get("assigned_volunteers", [])),

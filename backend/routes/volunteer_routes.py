@@ -82,43 +82,48 @@ def update_location():
 @volunteer_bp.route("/tasks/available", methods=["GET"])
 @volunteer_required
 def available_tasks():
-    db   = current_app.db
+    db = current_app.db
     volunteer, vid = _current_volunteer()
 
-    lat = float(request.args.get("lat") or volunteer.get("lat", 0))
-    lng = float(request.args.get("lng") or volunteer.get("lng", 0))
+    lat = request.args.get("lat", type=float)
+    lng = request.args.get("lng", type=float)
+    if lat is None:
+        lat = volunteer.get("lat")
+    if lng is None:
+        lng = volunteer.get("lng")
 
-    if not lat or not lng:
-        return jsonify({
-            "tasks": [],
-            "message": "Location not set. Please update profile."
-        }), 200
     radius_km = float(request.args.get("radius_km", current_app.config["DEFAULT_MATCH_RADIUS_KM"]))
     urgency   = request.args.get("urgency")
     task_type = request.args.get("task_type")
     page      = int(request.args.get("page", 1))
     per_page  = int(request.args.get("per_page", 20))
 
-    query = {
-        "status": "open",
-        "location": {
+    query = {"status": "open"}
+    if urgency:
+        query["urgency"] = urgency
+    if task_type:
+        query["task_type"] = task_type
+
+    if lat is not None and lng is not None:
+        query["location"] = {
             "$near": {
-                "$geometry":    {"type": "Point", "coordinates": [lng, lat]},
+                "$geometry": {"type": "Point", "coordinates": [lng, lat]},
                 "$maxDistance": radius_km * 1000,
             }
         }
-    }
-    if urgency:   query["urgency"]   = urgency
-    if task_type: query["task_type"] = task_type
 
     tasks = list(db.tasks.find(query).skip((page - 1) * per_page).limit(per_page))
 
-    for t in tasks:
-        t["distance_km"] = round(haversine_km(lat, lng, t["lat"], t["lng"]), 2)
+    if lat is not None and lng is not None:
+        for t in tasks:
+            try:
+                t["distance_km"] = round(haversine_km(lat, lng, t["lat"], t["lng"]), 2)
+            except Exception:
+                pass
 
     return jsonify({
-        "tasks":    serialize_list(tasks),
-        "page":     page,
+        "tasks": serialize_list(tasks),
+        "page": page,
         "per_page": per_page,
     }), 200
 
@@ -403,4 +408,7 @@ def ai_suggestions():
         current_app.config
     )
 
-    return jsonify({"suggestions": suggestions}), 200
+    return jsonify({
+        "suggestions": suggestions,
+        "tasks": suggestions
+    }), 200
