@@ -16,7 +16,9 @@ L.tileLayer(
 ).addTo(map);
 
 // CLUSTER
-const markers = L.markerClusterGroup();
+const markers = L.markerClusterGroup({
+  maxClusterRadius: 40, // Keeps tight clusters
+});
 map.addLayer(markers);
 
 // HEATMAP LAYER
@@ -31,11 +33,22 @@ setTimeout(() => {
   }
 }, 300);
 
-// COLOR
-function getColor(u) {
-  return u === 'urgent' ? '#f44336'
-       : u === 'med'    ? '#ffc107'
-       : '#4caf50';
+// COLOR & ICON GENERATOR
+function getIconHtml(urgency) {
+  const color = urgency === 'urgent' ? '#f44336'
+              : urgency === 'med'    ? '#ffc107'
+              : '#4caf50';
+  
+  // Custom styled CSS pin
+  return `
+    <div style="
+      background-color: ${color};
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      border: 2px solid white;
+      box-shadow: 0 0 6px rgba(0,0,0,0.8);
+    "></div>
+  `;
 }
 
 // STATE
@@ -61,6 +74,7 @@ async function loadTasks() {
 
   try {
     const data = await api.json(`/map/geojson/tasks${buildQuery()}`);
+    let count = 0;
 
     (data.features || []).forEach(f => {
       const [lng, lat] = f.geometry.coordinates;
@@ -68,33 +82,42 @@ async function loadTasks() {
 
       if (!lat || !lng) return;
 
-      const marker = L.circleMarker([lat, lng], {
-        radius: 8,
-        color: getColor(p.urgency),
-        fillColor: getColor(p.urgency),
-        fillOpacity: 0.9
+      // Use a custom divIcon for a cleaner look that clusters well
+      const customIcon = L.divIcon({
+        html: getIconHtml(p.urgency),
+        className: 'custom-pin', // removes default leaflet styles
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
       });
 
+      const marker = L.marker([lat, lng], { icon: customIcon });
+
       marker.bindPopup(`
-  <div style="min-width:220px;font-family:Arial;">
-    <div style="font-weight:700;font-size:14px;margin-bottom:6px;">
-      ${p.title || "Task"}
-    </div>
+        <div style="min-width:220px;font-family:Arial;">
+          <div style="font-weight:700;font-size:14px;margin-bottom:6px;">
+            ${p.title || "Task"}
+          </div>
 
-    <div style="font-size:12px;color:#555;margin-bottom:6px;">
-      ${p.description || "No description available"}
-    </div>
+          <div style="font-size:12px;color:#555;margin-bottom:6px;">
+            ${p.description || "No description available"}
+          </div>
 
-    <div style="font-size:12px;line-height:1.5;">
-      <div><b>🏷 Type:</b> ${p.task_type || '—'}</div>
-      <div><b>⚠ Urgency:</b> ${p.urgency || '—'}</div>
-      <div><b>⏰ Deadline:</b> ${p.deadline || '—'}</div>
-      <div><b>👥 Volunteers:</b> ${(p.assigned_volunteers?.length || 0)} / ${p.volunteers_needed || 1}</div>
-    </div>
-  </div>
-`);
+          <div style="font-size:12px;line-height:1.5;">
+            <div><b>🏷 Type:</b> ${p.task_type || '—'}</div>
+            <div><b>⚠ Urgency:</b> ${p.urgency || '—'}</div>
+            <div><b>⏰ Deadline:</b> ${p.deadline || '—'}</div>
+            <div><b>👥 Volunteers:</b> ${(p.assigned_volunteers?.length || 0)} / ${p.volunteers_needed || 1}</div>
+          </div>
+        </div>
+      `);
+      
       markers.addLayer(marker);
+      count++;
     });
+    
+    // Update count stat if available
+    const countEl = document.getElementById('count');
+    if(countEl) countEl.innerText = count;
 
   } catch (e) {
     console.error("Task load error:", e);
@@ -104,7 +127,7 @@ async function loadTasks() {
 // LOAD HEATMAP
 async function loadHeatmap() {
   try {
-    const res = await api.get(`/map/heatmap/tasks${buildQuery()}`);
+    const res = await fetch(`/map/heatmap/tasks${buildQuery()}`); // Fetch direct to bypass any api.json wrapper issues
     const data = await res.json();
 
     const points = (data.points || []).map(p => [
