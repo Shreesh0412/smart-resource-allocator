@@ -5,6 +5,8 @@ routes/ngo_routes.py — FIXED
 - Task creation is safer and supports pincode-based payloads.
 - JSON parsing is resilient with silent=True.
 - ObjectId conversions are guarded.
+- Fixed Error 2: `ngo` object is unpacked correctly in `review_report`.
+- Fixed Error 12: `active_requests` sorts urgency correctly via mapping.
 """
 
 from flask import Blueprint, request, jsonify, current_app
@@ -189,8 +191,11 @@ def active_requests():
 
     tasks = list(
         db.tasks.find({"ngo_id": nid, "status": {"$in": ["open", "assigned", "in_progress"]}})
-        .sort("urgency", -1)
     )
+
+    # FIX 12: Sort securely using a mapping logic instead of string alphabetical sort
+    urgency_map = {"urgent": 3, "med": 2, "low": 1}
+    tasks.sort(key=lambda x: urgency_map.get(x.get("urgency", "low"), 0), reverse=True)
 
     for task in tasks:
         valid_ids = _safe_object_ids(task.get("assigned_volunteers", []))
@@ -477,7 +482,8 @@ def get_pending_reports():
 @ngo_required
 def review_report(report_id):
     db = current_app.db
-    _, nid = _current_ngo()
+    # FIX 2: Correctly fetch ngo and nid so conversion doesn't crash
+    ngo, nid = _current_ngo()
     if not nid:
         return jsonify({"error": "NGO not found"}), 404
 

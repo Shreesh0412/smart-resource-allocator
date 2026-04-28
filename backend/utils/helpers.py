@@ -198,10 +198,11 @@ def is_valid_phone(phone: str) -> bool:
 # ── Pagination ─────────────────────────────────────────────────────────────────
 
 def paginate(query_cursor, page: int = 1, per_page: int = 20):
-    """Skip/limit pagination; returns (docs, total)."""
-    total = query_cursor.count()
-    docs  = list(query_cursor.skip((page - 1) * per_page).limit(per_page))
-    return docs, total
+    """Skip/limit pagination; safe for PyMongo 4.x."""
+    docs = list(query_cursor.clone())
+    total = len(docs)
+    paginated_docs = docs[(page - 1) * per_page : page * per_page]
+    return paginated_docs, total
 
 
 # ── Rating average ─────────────────────────────────────────────────────────────

@@ -72,7 +72,21 @@ async function apiFetch(path, options = {}, retried = false) {
 
   const res = await fetch(API_BASE + path, { ...options, headers });
 
+  // FIX 8: Automatically attempt to refresh token if 401/422 Unauthorized is encountered
   if ((res.status === 401 || res.status === 422) && !retried) {
+    const refresh = Auth.getRefresh();
+    if (refresh) {
+      const refreshRes = await fetch(API_BASE + '/auth/refresh', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${refresh}` }
+      });
+      if (refreshRes.ok) {
+        const data = await refreshRes.json();
+        Auth.save({ access_token: data.access_token });
+        // Retry the original request
+        return apiFetch(path, options, true);
+      }
+    }
     Auth.logout();
     return res;
   }
@@ -90,13 +104,14 @@ async function json(path, options = {}) {
 }
 
 // ── API OBJECT ──────────────────────────────────
+// FIX 7: Use `json` instead of `apiFetch` in generic REST wrappers so errors are correctly thrown
 const api = {
-  get:    (path) => apiFetch(path),
-  post:   (path, body) => apiFetch(path, { method: 'POST', body: body instanceof FormData ? body : JSON.stringify(body) }),
-  put:    (path, body) => apiFetch(path, { method: 'PUT', body: body instanceof FormData ? body : JSON.stringify(body) }),
-  patch:  (path, body) => apiFetch(path, { method: 'PATCH', body: body instanceof FormData ? body : JSON.stringify(body) }),
-  delete: (path) => apiFetch(path, { method: 'DELETE' }),
-  upload: (path, fd) => apiFetch(path, { method: 'POST', body: fd }),
+  get:    (path) => json(path),
+  post:   (path, body) => json(path, { method: 'POST', body: body instanceof FormData ? body : JSON.stringify(body) }),
+  put:    (path, body) => json(path, { method: 'PUT', body: body instanceof FormData ? body : JSON.stringify(body) }),
+  patch:  (path, body) => json(path, { method: 'PATCH', body: body instanceof FormData ? body : JSON.stringify(body) }),
+  delete: (path) => json(path, { method: 'DELETE' }),
+  upload: (path, fd) => json(path, { method: 'POST', body: fd }),
   json: json,
 
   volunteerLogin: (email, password) =>
@@ -129,7 +144,10 @@ const api = {
   getTaskApplicants: (taskId) => json(`/ngo/tasks/${taskId}/applicants`),
   assignVolunteer: (taskId, volId) => json(`/ngo/tasks/${taskId}/assign/${volId}`, { method: 'POST' }),
   changeUrgency: (taskId, urg) => json(`/ngo/tasks/${taskId}/urgency`, { method: 'PATCH', body: JSON.stringify({ urgency: urg }) }),
-  reviewReport: (id, action, note) => json(`/ngo/reports/${id}/review`, { method: 'POST', body: JSON.stringify({ action, note }) }),
+  
+  // FIX 5: Ensure 'deadline' is accepted and sent to the server when converting report to task
+  reviewReport: (id, action, note, deadline) => json(`/ngo/reports/${id}/review`, { method: 'POST', body: JSON.stringify({ action, note, deadline }) }),
+  
   getNGOAiSuggestions: (taskId) => json(`/ngo/tasks/${taskId}/ai-suggestions`),
   getNGOAnalytics: () => json('/ngo/analytics'),
   predictTask: (taskId) => json(`/ngo/tasks/${taskId}/predict`),

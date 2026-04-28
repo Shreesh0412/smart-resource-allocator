@@ -35,10 +35,10 @@ function showPanel(name) {
 async function loadOverview() {
   try {
     let profile = {};
-let stats = {};
+    let stats = {};
 
-try { profile = await api.getVolunteerProfile(); } catch {}
-try { stats = await api.getVolunteerStats(); } catch {}
+    try { profile = await api.getVolunteerProfile(); } catch {}
+    try { stats = await api.getVolunteerStats(); } catch {}
 
     document.getElementById('avatar').textContent       = initials(profile.name);
     document.getElementById('profile-name').textContent = profile.name;
@@ -125,7 +125,7 @@ async function loadSuggestions() {
           </div>
         </div>
         <div class="task-card-meta">
-          <span>📍 ${t.distance_km} km away</span>
+          <span>📍 ${t.distance_km != null ? t.distance_km : '?'} km away</span>
           <span>🏷️ ${t.task_type}</span>
           <span>⏰ ${formatDate(t.deadline)}</span>
           <span>👥 ${(t.assigned_volunteers?.length||0)}/${t.volunteers_needed} assigned</span>

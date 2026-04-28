@@ -251,12 +251,12 @@
             <div class="form-group">
               <label class="form-label">Required Skills (optional)</label>
               <div id="task-skills" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;">
-                <span class="skill-tag2" data-s="medical" onclick="toggleSkill(this)">🏥 Medical</span>
-                <span class="skill-tag2" data-s="driving" onclick="toggleSkill(this)">🚗 Driving</span>
-                <span class="skill-tag2" data-s="teaching" onclick="toggleSkill(this)">📚 Teaching</span>
-                <span class="skill-tag2" data-s="cooking" onclick="toggleSkill(this)">👨‍🍳 Cooking</span>
-                <span class="skill-tag2" data-s="logistics" onclick="toggleSkill(this)">📦 Logistics</span>
-                <span class="skill-tag2" data-s="construction" onclick="toggleSkill(this)">🔨 Construction</span>
+                <span class="skill-tag2" data-s="medical">🏥 Medical</span>
+                <span class="skill-tag2" data-s="driving">🚗 Driving</span>
+                <span class="skill-tag2" data-s="teaching">📚 Teaching</span>
+                <span class="skill-tag2" data-s="cooking">👨‍🍳 Cooking</span>
+                <span class="skill-tag2" data-s="logistics">📦 Logistics</span>
+                <span class="skill-tag2" data-s="construction">🔨 Construction</span>
               </div>
             </div>
             <div id="post-error" class="form-error" style="display:none;"></div>
@@ -413,7 +413,7 @@
   <div id="toast-container"></div>
   <script src="/static/js/api.js"></script>
   
-  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBctVoUm9p07GDbOCrcw4yv-d44WYF6GMo&libraries=visualization&callback=initMap" async defer></script>
+  <script src="https://maps.googleapis.com/maps/api/js?key={{ config.GOOGLE_MAPS_API_KEY }}&libraries=visualization" async defer></script>
   
   <script src="/static/js/ngo.js"></script>
 </body>

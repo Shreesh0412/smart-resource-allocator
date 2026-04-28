@@ -122,7 +122,6 @@
   </style>
 </head>
 <body>
-  <!-- Navigation -->
   <nav class="navbar">
     <div class="container">
       <a href="/" class="nav-brand">
@@ -138,7 +137,6 @@
     </div>
   </nav>
 
-  <!-- Hero -->
   <section class="hero">
     <div class="hero-bg"></div>
     <div class="hero-grid"></div>
@@ -163,7 +161,6 @@
         </div>
       </div>
 
-      <!-- Floating stats cards -->
       <div class="floating-stats">
         <div class="floating-stat">
           <div class="fs-val" id="live-urgent">—</div>
@@ -181,7 +178,6 @@
     </div>
   </section>
 
-  <!-- Features -->
   <section class="features">
     <div class="container">
       <div class="text-center" style="max-width:600px; margin:0 auto;">
@@ -192,7 +188,6 @@
     </div>
   </section>
 
-  <!-- How It Works -->
   <section class="how-it-works">
     <div class="container">
       <div class="text-center" style="max-width:600px; margin:0 auto;">
@@ -224,7 +219,6 @@
     </div>
   </section>
 
-  <!-- CTA -->
   <section class="cta-section">
     <div class="container">
       <p style="color:var(--orange);font-size:0.8rem;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:12px;">Get Started Today</p>
@@ -239,7 +233,6 @@
     </div>
   </section>
 
-  <!-- Footer -->
   <footer style="border-top:1px solid var(--border);padding:32px 0;text-align:center;">
     <div class="container">
       <div class="nav-brand" style="justify-content:center;margin-bottom:12px;">
@@ -253,12 +246,18 @@
   <div id="toast-container"></div>
   <script src="/static/js/api.js"></script>
   <script>
-    // Load live stats
+    // FIX 15: Map the fetched backend statistics directly into your UI fields.
     async function loadLiveStats() {
       try {
         const res = await fetch('/api/admin/leaderboard');
-        // Just show placeholders for landing page
-      } catch(e) {}
+        const data = await res.json();
+        
+        document.getElementById('live-urgent').textContent = data.urgent_tasks || 0;
+        document.getElementById('live-volunteers').textContent = data.active_volunteers || 0;
+        document.getElementById('live-completed').textContent = data.completed_today || 0;
+      } catch(e) {
+        console.error("Stats fetch failed", e);
+      }
     }
     loadLiveStats();
 

@@ -271,11 +271,13 @@
           body: JSON.stringify(payload)
         });
 
-        // Store tokens securely (adjust based on your api.js token handling)
-        localStorage.setItem('access_token', res.access_token);
-        if (res.refresh_token) {
-          localStorage.setItem('refresh_token', res.refresh_token);
-        }
+        // FIX: Store tokens securely using Auth object so that the user_type is also persisted and they don't bounce back to login immediately
+        Auth.save({
+          access_token: res.access_token,
+          refresh_token: res.refresh_token,
+          type: currentRole,
+          name: payload.name
+        });
 
         showToast('Account created successfully!', 'success');
         

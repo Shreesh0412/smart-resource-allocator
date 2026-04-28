@@ -19,14 +19,16 @@ def init_gemini(config):
 
 def predict_task_risk(db, task, config):
     """
-    Analyzes task details using Gemini and returns "on_track", "at_risk", or "critical".
+    Analyzes task details using Gemini and returns structured risk data.
     """
     if not init_gemini(config):
         print("WARNING: Gemini API Key missing. Falling back to basic math predictor.")
         vol_ratio = len(task.get("assigned_volunteers", [])) / max(1, task.get("volunteers_needed", 1))
-        if vol_ratio == 0 and task.get("urgency") == "urgent": return "critical"
-        elif vol_ratio < 1.0: return "at_risk"
-        return "on_track"
+        if vol_ratio == 0 and task.get("urgency") == "urgent": 
+            return {"risk_level": "critical", "risk_score": 90, "summary": "No volunteers for urgent task."}
+        elif vol_ratio < 1.0: 
+            return {"risk_level": "at_risk", "risk_score": 60, "summary": "Insufficient volunteers."}
+        return {"risk_level": "on_track", "risk_score": 10, "summary": "Adequate volunteers."}
 
     title = task.get('title', 'Unknown Task')
     desc = task.get('description', 'No description provided.')
@@ -60,15 +62,15 @@ def predict_task_risk(db, task, config):
         result = response.text.strip().lower()
         
         if "critical" in result:
-            return "critical"
+            return {"risk_level": "critical", "risk_score": 90, "summary": "Task is at critical risk of failure."}
         elif "at_risk" in result or "risk" in result:
-            return "at_risk"
+            return {"risk_level": "at_risk", "risk_score": 60, "summary": "Task is at risk due to lack of resources."}
         else:
-            return "on_track"
+            return {"risk_level": "on_track", "risk_score": 10, "summary": "Task is currently on track."}
             
     except Exception as e:
         print(f"Gemini AI Error: {e}")
-        return "at_risk" 
+        return {"risk_level": "at_risk", "risk_score": 50, "summary": "Predictor error fallback."}
 
 def extract_resources(description, config):
     """

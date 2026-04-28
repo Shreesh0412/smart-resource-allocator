@@ -118,18 +118,20 @@ function initPostTaskMap() {
 }
 
 // ── Skill tag toggle (post task form) ────────────────────────
+function toggleSkill(el) {
+  const on = el.classList.toggle('selected');
+  el.style.background  = on ? 'var(--orange-glow)' : '';
+  el.style.borderColor = on ? 'var(--orange)'      : 'var(--border)';
+  el.style.color       = on ? 'var(--orange)'      : 'var(--text-muted)';
+}
+
 document.querySelectorAll('.skill-tag2').forEach(tag => {
   tag.style.cssText = `
     padding:4px 12px; border-radius:100px; border:1px solid var(--border);
     font-size:0.8rem; cursor:pointer; color:var(--text-muted);
     transition:all 150ms; user-select:none;
   `;
-  tag.addEventListener('click', () => {
-    const on = tag.classList.toggle('selected');
-    tag.style.background     = on ? 'var(--orange-glow)' : '';
-    tag.style.borderColor    = on ? 'var(--orange)'      : 'var(--border)';
-    tag.style.color          = on ? 'var(--orange)'      : 'var(--text-muted)';
-  });
+  tag.addEventListener('click', () => toggleSkill(tag));
 });
 
 function getSelectedSkills() {
@@ -244,13 +246,6 @@ function riskIcon(r) {
   return r === 'on_track' ? '✅' : r === 'at_risk' ? '⚠️' : '🚨';
 }
 
-function toggleSkill(el) {
-  const on = el.classList.toggle('selected');
-  el.style.background  = on ? 'var(--orange-glow)' : '';
-  el.style.borderColor = on ? 'var(--orange)'      : 'var(--border)';
-  el.style.color       = on ? 'var(--orange)'      : 'var(--text-muted)';
-}
-
 async function postTask(e) {
   e.preventDefault();
   const btn   = document.getElementById('post-btn');
@@ -289,9 +284,13 @@ async function postTask(e) {
       'success', 6000
     );
 
-    // Reset form and go to active panel
+    // Completely reset the form
     document.getElementById('t-title').value = '';
     document.getElementById('t-desc').value  = '';
+    document.getElementById('t-address').value = '';
+    document.getElementById('t-pincode').value = '';
+    document.querySelectorAll('.skill-tag2.selected').forEach(el => toggleSkill(el)); // Reset skill chips
+    
     setTimeout(() => showPanel('active'), 1200);
   } catch(err) {
     errEl.textContent   = err.message;
