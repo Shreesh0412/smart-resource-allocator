@@ -20,17 +20,15 @@
         <div class="auth-logo">SAARTHI</div>
         <p class="auth-subtitle">Welcome back. Sign in to continue.</p>
 
-        <!-- Role Toggle -->
         <div class="auth-toggle">
-          <button class="auth-toggle-btn active" id="toggle-volunteer" onclick="setRole('volunteer')">
+          <button type="button" class="auth-toggle-btn active" id="toggle-volunteer" onclick="setRole('volunteer')">
             🙋 Volunteer
           </button>
-          <button class="auth-toggle-btn" id="toggle-ngo" onclick="setRole('ngo')">
+          <button type="button" class="auth-toggle-btn" id="toggle-ngo" onclick="setRole('ngo')">
             🏢 NGO
           </button>
         </div>
 
-        <!-- Login Form -->
         <form onsubmit="handleLogin(event)">
           <div style="display:flex;flex-direction:column;gap:16px;">
             <div class="form-group">
@@ -88,16 +86,16 @@
       const password = document.getElementById('password').value;
 
       try {
-        // ✅ FIXED API CALL
         const data = currentRole === 'volunteer'
           ? await api.volunteerLogin(email, password)
           : await api.ngoLogin(email, password);
 
+        // ✅ FIX: Use 'currentRole' directly instead of 'data.type'
         Auth.save({
           access_token: data.access_token,
           refresh_token: data.refresh_token,
           id: data.id,
-          type: data.type,
+          type: currentRole, 
           name: data.name
         });
 
