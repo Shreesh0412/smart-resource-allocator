@@ -113,12 +113,14 @@
     </div>
   </div>
 
-  <div id="toast-container"></div>
+  <div id="maps-key-warning" style="display:none;position:absolute;top:84px;right:24px;z-index:20;background:#2a1f14;border:1px solid #ff9800;color:#ffcc80;padding:10px 14px;border-radius:10px;font-size:12px;max-width:320px;">Google Maps API key is missing. Set GOOGLE_MAPS_API_KEY in Render env vars.</div>
+    <div id="toast-container"></div>
   
   <script src="/static/js/api.js"></script>
   
   <script src="https://unpkg.com/@googlemaps/markerclusterer/dist/index.min.js"></script>
-  <script src="https://maps.googleapis.com/maps/api/js?key={{ config.GOOGLE_MAPS_API_KEY }}&libraries=visualization" async defer></script>
+  <script src="/static/js/map.js"></script>
+  <script src="https://maps.googleapis.com/maps/api/js?key={{ config.get('GOOGLE_MAPS_API_KEY', '') }}&libraries=visualization&callback=initMap" defer></script>
   <script src="/static/js/map.js"></script>
 </body>
 </html>
