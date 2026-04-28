@@ -4,148 +4,108 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Live Map — Saarthi</title>
-
   <link rel="stylesheet" href="/static/css/main.css">
-
-  <!-- Leaflet -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-
-  <!-- Marker Cluster -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css">
-  <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
-
-  <!-- Heatmap -->
-  <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
-
+  
   <style>
-    body { overflow: hidden; }
-
+    /* Full screen map styling */
+    body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: var(--bg); }
+    .navbar { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; }
+    
     #map {
-      position: fixed;
-      top: var(--nav-h);
-      left: 0;
-      right: 0;
+      position: absolute;
+      top: 64px; /* Adjust based on navbar height */
       bottom: 0;
+      width: 100%;
       z-index: 1;
     }
-
+    
+    /* Floating control panel */
     #map-panel {
-      position: fixed;
-      top: calc(var(--nav-h) + 16px);
-      left: 16px;
-      z-index: 9999;
-      width: 260px;
-      background: rgba(10,15,30,0.9);
-      backdrop-filter: blur(18px);
-      border-radius: 16px;
-      padding: 14px;
+      position: absolute;
+      top: 84px;
+      left: 24px;
+      z-index: 10;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      width: 320px;
+      box-shadow: var(--shadow-lg);
     }
 
-    .map-btn {
-      width: 100%;
-      padding: 12px;
-      border-radius: 12px;
-      border: none;
-      background: #1a1f35;
-      color: #fff;
-      cursor: pointer;
-      font-weight: 600;
-      margin-bottom: 6px;
+    .filter-group { margin-bottom: 14px; }
+    .filter-label { display: block; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; color: var(--text-dim); }
+    .filter-select { 
+      width: 100%; padding: 10px; background: var(--surface); border: 1px solid var(--border); 
+      color: var(--text); border-radius: var(--radius); outline: none;
     }
-
-    .map-btn:hover {
-      background: #ff5722;
+    .filter-select:focus { border-color: var(--orange); }
+    
+    .toggle-buttons { display: flex; gap: 10px; margin-top: 20px; }
+    .toggle-btn { 
+      flex: 1; padding: 10px; text-align: center; border-radius: var(--radius); cursor: pointer; 
+      border: 1px solid var(--border); background: var(--surface); color: var(--text-muted); 
+      font-size: 0.85rem; font-weight: 600; transition: all var(--anim-fast); 
     }
-
-    .map-btn.active {
-      background: #ff5722;
-    }
-
-    #map-legend {
-      position: fixed;
-      top: calc(var(--nav-h) + 16px);
-      right: 16px;
-      z-index: 9999;
-      background: rgba(10,15,30,0.9);
-      padding: 12px;
-      border-radius: 10px;
-    }
-
-    #map-stats {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      z-index: 9999;
-    }
-
-    .map-stat {
-      background: rgba(10,15,30,0.95);
-      padding: 10px;
-      border-radius: 10px;
-    }
-
-    .leaflet-container {
-      z-index: 1 !important;
-    }
+    .toggle-btn.active { background: var(--orange-glow); border-color: var(--orange); color: var(--orange); }
+    
+    /* Make Google Maps InfoWindow readable by default */
+    .gm-style-iw-c { padding: 0 !important; border-radius: var(--radius) !important; }
+    .gm-style-iw-d { padding: 16px !important; overflow: hidden !important; }
   </style>
 </head>
-
 <body>
-
-  <!-- NAVBAR -->
   <nav class="navbar">
     <div class="container">
-      <a href="/index.html" class="nav-brand">SAARTHI</a>
+      <a href="/index.html" class="nav-brand"><div class="dot"></div>SAARTHI</a>
+      <div class="nav-links">
+        <a href="javascript:history.back()" class="btn btn-secondary btn-sm">← Back</a>
+      </div>
     </div>
   </nav>
 
-  <!-- MAP -->
   <div id="map"></div>
 
-  <!-- CONTROL PANEL -->
   <div id="map-panel">
-
-    <button id="taskBtn" class="map-btn active" onclick="toggleTasks()">📍 Tasks</button>
-    <button id="heatBtn" class="map-btn" onclick="toggleHeatmap()">🔥 Heatmap</button>
-
-    <div style="margin-top:10px;">
-      <select id="filter-urgency" class="map-btn">
-        <option value="">All Urgency</option>
+    <h3 style="margin-bottom: 20px; font-family: var(--font-display); letter-spacing: 0.04em; font-size: 1.4rem;">LIVE MAP</h3>
+    
+    <div class="filter-group">
+      <label class="filter-label">Urgency Level</label>
+      <select id="filter-urgency" class="filter-select">
+        <option value="">All Urgencies</option>
         <option value="urgent">🔴 Urgent</option>
         <option value="med">🟡 Medium</option>
         <option value="low">🟢 Low</option>
       </select>
+    </div>
 
-      <select id="filter-type" class="map-btn">
-        <option value="">All Types</option>
-        <option value="education">Education</option>
-        <option value="health">Health</option>
-        <option value="food">Food</option>
-        <option value="rescue">Rescue</option>
+    <div class="filter-group">
+      <label class="filter-label">Task Category</label>
+      <select id="filter-type" class="filter-select">
+        <option value="">All Categories</option>
+        <option value="health">🏥 Health</option>
+        <option value="food">🍱 Food</option>
+        <option value="shelter">🏠 Shelter</option>
+        <option value="disaster">🆘 Disaster</option>
+        <option value="animal">🐾 Animal Care</option>
+        <option value="environment">🌿 Environment</option>
+        <option value="education">📚 Education</option>
+        <option value="other">📌 Other</option>
       </select>
     </div>
 
-  </div>
-
-  <!-- LEGEND -->
-  <div id="map-legend">
-    🔴 Urgent <br>
-    🟡 Medium <br>
-    🟢 Low
-  </div>
-
-  <!-- STATS -->
-  <div id="map-stats">
-    <div class="map-stat">
-      Tasks: <span id="count">0</span>
+    <div class="toggle-buttons">
+      <div id="taskBtn" class="toggle-btn active" onclick="toggleTasks()">📍 Tasks (<span id="count">0</span>)</div>
+      <div id="heatBtn" class="toggle-btn" onclick="toggleHeatmap()">🔥 Heatmap</div>
     </div>
   </div>
 
-  <!-- SCRIPTS (ORDER IS IMPORTANT) -->
+  <div id="toast-container"></div>
+  
   <script src="/static/js/api.js"></script>
+  
+  <script src="https://unpkg.com/@googlemaps/markerclusterer/dist/index.min.js"></script>
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBctVoUm9p07GDbOCrcw4yv-d44WYF6GMo&libraries=visualization&callback=initMap" async defer></script>
   <script src="/static/js/map.js"></script>
-
 </body>
 </html>

@@ -97,13 +97,15 @@ def task_geojson():
     Returns a GeoJSON FeatureCollection for rendering task markers on the map.
     Each feature carries full task metadata as properties.
     """
-    db      = current_app.db
-    status  = request.args.get("status")
-    urgency = request.args.get("urgency")
+    db        = current_app.db
+    status    = request.args.get("status")
+    urgency   = request.args.get("urgency")
+    task_type = request.args.get("task_type")
 
     query = {}
-    if status:  query["status"]  = status
-    if urgency: query["urgency"] = urgency
+    if status:    query["status"]    = status
+    if urgency:   query["urgency"]   = urgency
+    if task_type: query["task_type"] = task_type
 
     tasks = list(db.tasks.find(query))
     features = []

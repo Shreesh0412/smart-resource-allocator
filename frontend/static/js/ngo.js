@@ -10,7 +10,7 @@ document.getElementById('nav-name').textContent = Auth.getUserName() || 'NGO';
 let currentPanel = 'overview';
 let selectedRating = 0;
 
-// ✨ NEW: Map Variables
+// ✨ Map Variables (Google Maps)
 let postTaskMap = null;
 let postTaskMarker = null;
 
@@ -27,7 +27,7 @@ function showPanel(name) {
 
   const loaders = {
     overview:      loadOverview,
-    'post-task':   initPostTaskMap, // ✨ Trigger map init when tab opens
+    'post-task':   initPostTaskMap, // Trigger map init when tab opens
     active:        loadActive,
     completed:     loadCompleted,
     reports:       loadReports,
@@ -38,51 +38,83 @@ function showPanel(name) {
   if (loaders[name]) loaders[name]();
 }
 
-// ✨ NEW: Map Initialization
+// ✨ Initialize Google Map for Task Posting
 function initPostTaskMap() {
+  // If the map is already initialized, just trigger a resize event
   if (postTaskMap) {
-    // Already initialized, just fix sizing since it was hidden
-    setTimeout(() => postTaskMap.invalidateSize(), 100);
+    google.maps.event.trigger(postTaskMap, 'resize');
     return;
   }
   
   const defaultLat = 20.5937; // India Center
   const defaultLng = 78.9629;
   
-  postTaskMap = L.map('task-picker-map').setView([defaultLat, defaultLng], 5);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap'
-  }).addTo(postTaskMap);
+  // Custom dark theme styling
+  const darkMapStyle = [
+    { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
+    { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
+    { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
+    { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
+    { featureType: "road", elementType: "geometry", stylers: [{ color: "#38414e" }] },
+    { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#212a37" }] },
+    { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#9ca5b3" }] },
+    { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#746855" }] },
+    { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#1f2835" }] },
+    { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] },
+    { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#515c6d" }] },
+    { featureType: "water", elementType: "labels.text.stroke", stylers: [{ color: "#17263c" }] }
+  ];
 
+  // Initialize Map
+  postTaskMap = new google.maps.Map(document.getElementById('task-picker-map'), {
+    center: { lat: defaultLat, lng: defaultLng },
+    zoom: 5,
+    styles: darkMapStyle,
+    disableDefaultUI: true,
+    zoomControl: true,
+  });
+
+  // Function to update coordinates in the hidden form fields
   function updateCoords(lat, lng) {
     document.getElementById('t-lat').value = lat;
     document.getElementById('t-lng').value = lng;
+    
     if (postTaskMarker) {
-      postTaskMarker.setLatLng([lat, lng]);
+      postTaskMarker.setPosition({ lat, lng });
     } else {
-      postTaskMarker = L.marker([lat, lng], {draggable: true}).addTo(postTaskMap);
-      postTaskMarker.on('dragend', function() {
-        const pos = postTaskMarker.getLatLng();
-        updateCoords(pos.lat, pos.lng);
+      postTaskMarker = new google.maps.Marker({
+        position: { lat, lng },
+        map: postTaskMap,
+        draggable: true,
+        animation: google.maps.Animation.DROP
+      });
+      
+      // Update coordinates when marker is dragged
+      postTaskMarker.addListener('dragend', function() {
+        const pos = postTaskMarker.getPosition();
+        updateCoords(pos.lat(), pos.lng());
       });
     }
   }
 
-  // Auto locate if allowed
+  // Auto locate user
   if ("geolocation" in navigator) {
     navigator.geolocation.getCurrentPosition(function(pos) {
       const uLat = pos.coords.latitude;
       const uLng = pos.coords.longitude;
-      postTaskMap.setView([uLat, uLng], 15);
+      postTaskMap.setCenter({ lat: uLat, lng: uLng });
+      postTaskMap.setZoom(15);
       updateCoords(uLat, uLng);
     });
   }
 
-  postTaskMap.on('click', function(e) {
-    updateCoords(e.latlng.lat, e.latlng.lng);
+  // Place marker on map click
+  postTaskMap.addListener('click', function(e) {
+    updateCoords(e.latLng.lat(), e.latLng.lng());
   });
 
-  setTimeout(() => postTaskMap.invalidateSize(), 100);
+  // Force resize just in case
+  setTimeout(() => google.maps.event.trigger(postTaskMap, 'resize'), 300);
 }
 
 // ── Skill tag toggle (post task form) ────────────────────────
@@ -149,7 +181,7 @@ async function loadOverview() {
     document.getElementById('ov-urgent').textContent = urgent;
 
     // Check pending reports
-    const reports = await api.json('/ngo/reports'); // Fixed standard JSON call
+    const reports = await api.json('/ngo/reports');
     const pending = (reports.reports || []).length;
     if (pending > 0) {
       const badge = document.getElementById('reports-count');
@@ -212,7 +244,6 @@ function riskIcon(r) {
   return r === 'on_track' ? '✅' : r === 'at_risk' ? '⚠️' : '🚨';
 }
 
-
 function toggleSkill(el) {
   const on = el.classList.toggle('selected');
   el.style.background  = on ? 'var(--orange-glow)' : '';
@@ -226,7 +257,6 @@ async function postTask(e) {
   const errEl = document.getElementById('post-error');
   errEl.style.display = 'none';
 
-  // ✨ Ensure a location was selected
   const latVal = document.getElementById('t-lat').value;
   const lngVal = document.getElementById('t-lng').value;
   if (!latVal || !lngVal) {
@@ -249,7 +279,6 @@ async function postTask(e) {
       address:           document.getElementById('t-address').value,
       pincode:           document.getElementById('t-pincode').value.trim(),
       required_skills:   getSelectedSkills(),
-      // ✨ Send actual map coordinates
       lat:               parseFloat(latVal),
       lng:               parseFloat(lngVal)
     };
@@ -407,7 +436,7 @@ async function loadReports() {
   const el = document.getElementById('reports-list');
   el.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
   try {
-    const data = await api.json('/ngo/reports'); // Fixed api.json wrapper
+    const data = await api.json('/ngo/reports');
     if (!data.reports?.length) {
       el.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>No pending reports in your area.</p></div>';
       return;
