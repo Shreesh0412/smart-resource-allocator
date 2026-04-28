@@ -1,1 +1,1 @@
-# smart-resource-allocator
+# SAARTHI-Smart Resource Allocator
