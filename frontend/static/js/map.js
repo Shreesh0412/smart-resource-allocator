@@ -3,13 +3,29 @@
 let map;
 let markerCluster;
 let heatLayer = null;
-let currentMarkers = [];
+let currentMarkers = []; // specifically for tasks so they cluster
 let infoWindow;
-let tasksVisible = true;
-let heatmapVisible = false;
 let refreshInterval = null;
 
-// 🌙 Custom Dark Theme to match the SAARTHI UI perfectly
+// ✨ NEW: Layer State Tracker
+let layers = {
+  tasks: true,
+  heatmap: false,
+  vols: false,
+  routes: false,
+  ngos: false,
+  reports: false
+};
+
+// Storage arrays for the non-clustered markers/lines
+let mapObjects = {
+  vols: [],
+  routes: [],
+  ngos: [],
+  reports: []
+};
+
+// 🌙 Custom Dark Theme
 const darkMapStyle = [
   { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
   { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
@@ -25,35 +41,28 @@ const darkMapStyle = [
   { featureType: "water", elementType: "labels.text.stroke", stylers: [{ color: "#17263c" }] }
 ];
 
-// INIT MAP (This is automatically called by the Google script tag 'callback=initMap')
+// INIT MAP
 window.initMap = function() {
   map = new google.maps.Map(document.getElementById('map'), {
     center: { lat: 20.5937, lng: 78.9629 }, // Center of India
     zoom: 5,
     minZoom: 3,
     styles: darkMapStyle,
-    disableDefaultUI: true, // Hides default Google Maps UI clutter
+    disableDefaultUI: true,
     zoomControl: true,
     mapTypeControl: false,
     streetViewControl: false
   });
 
   infoWindow = new google.maps.InfoWindow();
-  
-  // Initialize Google's official MarkerClusterer
   markerCluster = new markerClusterer.MarkerClusterer({ map, markers: [] });
 
-  loadTasks();
+  // Initial loads
+  if (layers.tasks) loadTasks();
   startAutoRefresh();
 };
 
-// PIN COLORS
-function getIconColor(urgency) {
-  return urgency === 'urgent' ? '#f44336'
-       : urgency === 'med'    ? '#ffc107'
-       : '#4caf50';
-}
-
+// QUERY BUILDER (Only applies to Tasks and Heatmap)
 function buildQuery() {
   const urgency = document.getElementById('filter-urgency')?.value || '';
   const type    = document.getElementById('filter-type')?.value || '';
@@ -63,13 +72,13 @@ function buildQuery() {
   return qs ? '?' + qs.slice(0, -1) : '';
 }
 
-// LOAD TASKS
+// ── LAYER DATA FETCHERS ──────────────────────────────────────
+
 async function loadTasks() {
   try {
     const data = await api.json(`/map/geojson/tasks${buildQuery()}`);
     let count = 0;
 
-    // Clear existing markers from map and cluster
     markerCluster.clearMarkers();
     currentMarkers.forEach(m => m.setMap(null));
     currentMarkers = [];
@@ -79,34 +88,23 @@ async function loadTasks() {
       const p = f.properties;
       if (!lat || !lng) return;
 
-      // Create Crisp Vector Circles as Pins
       const marker = new google.maps.Marker({
         position: { lat, lng },
         icon: {
           path: google.maps.SymbolPath.CIRCLE,
-          fillColor: getIconColor(p.urgency),
-          fillOpacity: 1,
-          strokeColor: 'white',
-          strokeWeight: 2,
-          scale: 8 // size of the dot
+          fillColor: p.urgency === 'urgent' ? '#f44336' : p.urgency === 'med' ? '#ffc107' : '#4caf50',
+          fillOpacity: 1, strokeColor: 'white', strokeWeight: 2, scale: 8
         }
       });
 
-      // Bind the popup card (Inline styled for readability on Google's white popup)
       marker.addListener('click', () => {
         infoWindow.setContent(`
-          <div style="min-width:220px;font-family:Arial;color:#111;">
-            <div style="font-weight:700;font-size:15px;margin-bottom:6px;border-bottom:1px solid #eee;padding-bottom:6px;">
-              ${p.title || "Task"}
-            </div>
-            <div style="font-size:13px;color:#444;margin-bottom:10px;">
-              ${p.description || "No description available"}
-            </div>
+          <div style="min-width:200px;color:#111;">
+            <div style="font-weight:700;font-size:15px;margin-bottom:6px;border-bottom:1px solid #eee;padding-bottom:6px;">${p.title || "Task"}</div>
             <div style="font-size:12px;line-height:1.6;">
               <div><b>🏷 Type:</b> ${p.task_type || '—'}</div>
               <div><b>⚠ Urgency:</b> ${p.urgency || '—'}</div>
-              <div><b>⏰ Deadline:</b> ${p.deadline || '—'}</div>
-              <div><b>👥 Volunteers:</b> ${(p.assigned_volunteers?.length || 0)} / ${p.volunteers_needed || 1}</div>
+              <div><b>👥 Volunteers:</b> ${p.assigned_count || 0} / ${p.volunteers_needed || 1}</div>
             </div>
           </div>
         `);
@@ -117,127 +115,176 @@ async function loadTasks() {
       count++;
     });
 
-    // Add all new markers to the clusterer
     markerCluster.addMarkers(currentMarkers);
-
-    // Update frontend count
-    const countEl = document.getElementById('count');
-    if(countEl) countEl.innerText = count;
-
-  } catch (e) {
-    console.error("Task load error:", e);
-  }
+    if(document.getElementById('count')) document.getElementById('count').innerText = count;
+  } catch (e) { console.error("Task load error:", e); }
 }
 
-// LOAD HEATMAP
 async function loadHeatmap() {
   try {
-    // 1. Fetch via the auth-aware api helper (same as loadTasks)
     const data = await api.json(`/map/geojson/tasks${buildQuery()}`);
-
-    // 2. Parse the GeoJSON features into Google Maps LatLng points
     const points = (data.features || []).map(f => {
-      // GeoJSON stores coordinates as [longitude, latitude]
       const [lng, lat] = f.geometry.coordinates;
-      const urgency = f.properties.urgency;
-      
-      // Assign weight based on urgency (Urgent tasks glow hotter)
-      let pointWeight = 1;
-      if (urgency === 'urgent') pointWeight = 3;
-      if (urgency === 'med') pointWeight = 2;
+      let w = 1;
+      if (f.properties.urgency === 'urgent') w = 3;
+      if (f.properties.urgency === 'med') w = 2;
+      return { location: new google.maps.LatLng(lat, lng), weight: w };
+    }).filter(p => !isNaN(p.location.lat()));
 
-      return {
-        location: new google.maps.LatLng(lat, lng),
-        weight: pointWeight
-      };
-    }).filter(p => !isNaN(p.location.lat()) && !isNaN(p.location.lng()));
+    if (heatLayer) heatLayer.setMap(null);
 
-    if (heatLayer) {
-      heatLayer.setMap(null); // Remove old layer
-    }
-
-    // 3. Generate new heatmap layer
     heatLayer = new google.maps.visualization.HeatmapLayer({
-      data: points,
-      radius: 35, // Adjust this if the glow is too big or small
-      opacity: 0.8,
-      gradient: [
-        'rgba(0, 255, 255, 0)',
-        'rgba(0, 255, 255, 1)',
-        'rgba(0, 191, 255, 1)',
-        'rgba(0, 127, 255, 1)',
-        'rgba(0, 63, 255, 1)',
-        'rgba(0, 0, 255, 1)',
-        'rgba(0, 0, 223, 1)',
-        'rgba(0, 0, 191, 1)',
-        'rgba(0, 0, 159, 1)',
-        'rgba(0, 0, 127, 1)',
-        'rgba(63, 0, 91, 1)',
-        'rgba(127, 0, 63, 1)',
-        'rgba(191, 0, 31, 1)',
-        'rgba(255, 0, 0, 1)'
-      ]
+      data: points, radius: 35, opacity: 0.8,
+      gradient: [ 'rgba(0,255,255,0)', 'rgba(0,255,255,1)', 'rgba(0,191,255,1)', 'rgba(0,127,255,1)', 'rgba(0,0,255,1)', 'rgba(127,0,63,1)', 'rgba(255,0,0,1)' ]
     });
-
     heatLayer.setMap(map);
+  } catch (e) { console.error("Heatmap error:", e); }
+}
 
-  } catch (e) {
-    console.error("Heatmap error:", e);
+async function loadVolunteers() {
+  try {
+    const data = await api.json(`/map/volunteers/positions`);
+    clearObjects('vols');
+    
+    (data.features || []).forEach(f => {
+      const [lng, lat] = f.geometry.coordinates;
+      const marker = new google.maps.Marker({
+        position: { lat, lng }, map: map,
+        icon: { path: google.maps.SymbolPath.CIRCLE, fillColor: '#2196f3', fillOpacity: 1, strokeColor: 'white', strokeWeight: 2, scale: 6 } // Cyan/Blue
+      });
+      marker.addListener('click', () => {
+        infoWindow.setContent(`<div style="color:#111;padding:5px;"><b>🏃 Volunteer:</b> ${f.properties.name}<br><b>Trust Score:</b> ${f.properties.trust_score}</div>`);
+        infoWindow.open(map, marker);
+      });
+      mapObjects.vols.push(marker);
+    });
+  } catch(e) { console.error(e); }
+}
+
+async function loadRoutes() {
+  try {
+    const data = await api.json(`/map/lines/volunteer-to-task`);
+    clearObjects('routes');
+
+    (data.features || []).forEach(f => {
+      const path = f.geometry.coordinates.map(c => ({ lat: c[1], lng: c[0] }));
+      const polyline = new google.maps.Polyline({
+        path: path, geodesic: true, strokeColor: '#00bcd4', strokeOpacity: 0.8, strokeWeight: 3, map: map // Cyan Line
+      });
+      polyline.addListener('click', (e) => {
+        infoWindow.setContent(`<div style="color:#111;padding:5px;"><b>🔗 Active Route</b><br>${f.properties.volunteer_name} → ${f.properties.task_title}</div>`);
+        infoWindow.setPosition(e.latLng);
+        infoWindow.open(map);
+      });
+      mapObjects.routes.push(polyline);
+    });
+  } catch(e) { console.error(e); }
+}
+
+async function loadNGOs() {
+  try {
+    const data = await api.json(`/map/ngos`);
+    clearObjects('ngos');
+
+    (data.features || []).forEach(f => {
+      const [lng, lat] = f.geometry.coordinates;
+      const marker = new google.maps.Marker({
+        position: { lat, lng }, map: map,
+        icon: { path: google.maps.SymbolPath.CIRCLE, fillColor: '#9c27b0', fillOpacity: 1, strokeColor: 'white', strokeWeight: 2, scale: 8 } // Purple
+      });
+      marker.addListener('click', () => {
+        infoWindow.setContent(`<div style="color:#111;padding:5px;"><b>🏢 NGO:</b> ${f.properties.name}<br><b>Focus:</b> ${(f.properties.focus_areas||[]).join(', ')}</div>`);
+        infoWindow.open(map, marker);
+      });
+      mapObjects.ngos.push(marker);
+    });
+  } catch(e) { console.error(e); }
+}
+
+async function loadReports() {
+  try {
+    const data = await api.json(`/map/heatmap/problems`);
+    clearObjects('reports');
+
+    (data.points || []).forEach(p => {
+      const marker = new google.maps.Marker({
+        position: { lat: p.lat, lng: p.lng }, map: map,
+        icon: { path: google.maps.SymbolPath.CIRCLE, fillColor: '#ff9800', fillOpacity: 1, strokeColor: 'white', strokeWeight: 2, scale: 7 } // Orange
+      });
+      marker.addListener('click', () => {
+        infoWindow.setContent(`<div style="color:#111;padding:5px;"><b>⚠️ Unverified Report</b><br>${p.label}</div>`);
+        infoWindow.open(map, marker);
+      });
+      mapObjects.reports.push(marker);
+    });
+  } catch(e) { console.error(e); }
+}
+
+
+// ── LAYER MANAGEMENT ENGINE ───────────────────────────────────
+
+function clearObjects(layerName) {
+  if (mapObjects[layerName]) {
+    mapObjects[layerName].forEach(obj => obj.setMap(null));
+    mapObjects[layerName] = [];
   }
 }
+
+window.toggleLayer = function(layerName) {
+  layers[layerName] = !layers[layerName];
+  const btn = document.getElementById(`btn-${layerName}`);
+  
+  if (layers[layerName]) {
+    btn.classList.add('active');
+    // Call the respective loader
+    if (layerName === 'tasks') loadTasks();
+    if (layerName === 'heatmap') loadHeatmap();
+    if (layerName === 'vols') loadVolunteers();
+    if (layerName === 'routes') loadRoutes();
+    if (layerName === 'ngos') loadNGOs();
+    if (layerName === 'reports') loadReports();
+  } else {
+    btn.classList.remove('active');
+    // Clear the respective layer
+    if (layerName === 'tasks') {
+      if(markerCluster) markerCluster.clearMarkers();
+      currentMarkers.forEach(m => m.setMap(null));
+      currentMarkers = [];
+    } else if (layerName === 'heatmap') {
+      if(heatLayer) heatLayer.setMap(null);
+    } else {
+      clearObjects(layerName);
+    }
+  }
+};
 
 // FIX CONTROL PANEL CLICK PROPAGATION
 setTimeout(() => {
   const panel = document.getElementById('map-panel');
   if (panel) {
-    // Stops the map from panning/zooming when clicking inside the panel
-    panel.addEventListener('mousedown', (e) => e.stopPropagation());
-    panel.addEventListener('touchstart', (e) => e.stopPropagation());
-    panel.addEventListener('dblclick', (e) => e.stopPropagation());
-    panel.addEventListener('wheel', (e) => e.stopPropagation());
+    ['mousedown', 'touchstart', 'dblclick', 'wheel'].forEach(evt => {
+      panel.addEventListener(evt, e => e.stopPropagation());
+    });
   }
 }, 500);
 
-// TOGGLE TASKS BUTTON
-window.toggleTasks = function () {
-  const btn = document.getElementById("taskBtn");
-  if (tasksVisible) {
-    markerCluster.clearMarkers();
-    currentMarkers.forEach(m => m.setMap(null));
-    if (btn) btn.classList.remove("active");
-  } else {
-    loadTasks();
-    if (btn) btn.classList.add("active");
-  }
-  tasksVisible = !tasksVisible;
-};
-
-// TOGGLE HEATMAP BUTTON
-window.toggleHeatmap = function () {
-  const btn = document.getElementById("heatBtn");
-  if (heatmapVisible) {
-    if (heatLayer) heatLayer.setMap(null);
-    if (btn) btn.classList.remove("active");
-  } else {
-    loadHeatmap();
-    if (btn) btn.classList.add("active");
-  }
-  heatmapVisible = !heatmapVisible;
-};
-
-// AUTO-RELOAD ON FILTER CHANGE
+// AUTO-RELOAD ON FILTER CHANGE (Only affects tasks/heatmap)
 document.addEventListener('change', (e) => {
   if (e.target.id === 'filter-urgency' || e.target.id === 'filter-type') {
-    if (tasksVisible) loadTasks();
-    if (heatmapVisible) loadHeatmap();
+    if (layers.tasks) loadTasks();
+    if (layers.heatmap) loadHeatmap();
   }
 });
 
-// AUTO REFRESH LOOP
+// AUTO REFRESH LOOP (Refreshes whatever is active)
 function startAutoRefresh() {
   if (refreshInterval) clearInterval(refreshInterval);
   refreshInterval = setInterval(() => {
-    if (tasksVisible) loadTasks();
-    if (heatmapVisible) loadHeatmap();
+    if (layers.tasks) loadTasks();
+    if (layers.heatmap) loadHeatmap();
+    if (layers.vols) loadVolunteers();
+    if (layers.routes) loadRoutes();
+    if (layers.ngos) loadNGOs();
+    if (layers.reports) loadReports();
   }, 15000);
 }

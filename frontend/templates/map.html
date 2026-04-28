@@ -13,7 +13,7 @@
     
     #map {
       position: absolute;
-      top: 64px; /* Adjust based on navbar height */
+      top: 64px;
       bottom: 0;
       width: 100%;
       z-index: 1;
@@ -25,27 +25,35 @@
       top: 84px;
       left: 24px;
       z-index: 10;
-      background: var(--card);
+      background: rgba(30, 35, 45, 0.95);
       border: 1px solid var(--border);
       border-radius: var(--radius-lg);
       padding: 24px;
-      width: 320px;
+      width: 360px; /* Slightly wider for the grid */
       box-shadow: var(--shadow-lg);
+      backdrop-filter: blur(10px);
     }
 
     .filter-group { margin-bottom: 14px; }
     .filter-label { display: block; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; color: var(--text-dim); }
     .filter-select { 
       width: 100%; padding: 10px; background: var(--surface); border: 1px solid var(--border); 
-      color: var(--text); border-radius: var(--radius); outline: none;
+      color: var(--text); border-radius: var(--radius); outline: none; cursor: pointer;
     }
     .filter-select:focus { border-color: var(--orange); }
     
-    .toggle-buttons { display: flex; gap: 10px; margin-top: 20px; }
+    /* ✨ NEW: Layer Grid System */
+    .layer-grid { 
+      display: grid; 
+      grid-template-columns: 1fr 1fr; 
+      gap: 10px; 
+      margin-top: 10px; 
+    }
     .toggle-btn { 
-      flex: 1; padding: 10px; text-align: center; border-radius: var(--radius); cursor: pointer; 
+      padding: 10px; text-align: center; border-radius: var(--radius); cursor: pointer; 
       border: 1px solid var(--border); background: var(--surface); color: var(--text-muted); 
-      font-size: 0.85rem; font-weight: 600; transition: all var(--anim-fast); 
+      font-size: 0.8rem; font-weight: 600; transition: all var(--anim-fast); 
+      display: flex; align-items: center; justify-content: center; gap: 6px;
     }
     .toggle-btn.active { background: var(--orange-glow); border-color: var(--orange); color: var(--orange); }
     
@@ -70,7 +78,7 @@
     <h3 style="margin-bottom: 20px; font-family: var(--font-display); letter-spacing: 0.04em; font-size: 1.4rem;">LIVE MAP</h3>
     
     <div class="filter-group">
-      <label class="filter-label">Urgency Level</label>
+      <label class="filter-label">Task Urgency</label>
       <select id="filter-urgency" class="filter-select">
         <option value="">All Urgencies</option>
         <option value="urgent">🔴 Urgent</option>
@@ -94,9 +102,14 @@
       </select>
     </div>
 
-    <div class="toggle-buttons">
-      <div id="taskBtn" class="toggle-btn active" onclick="toggleTasks()">📍 Tasks (<span id="count">0</span>)</div>
-      <div id="heatBtn" class="toggle-btn" onclick="toggleHeatmap()">🔥 Heatmap</div>
+    <label class="filter-label" style="margin-top: 24px;">Map Layers</label>
+    <div class="layer-grid">
+      <div id="btn-tasks" class="toggle-btn active" onclick="toggleLayer('tasks')">📍 Tasks (<span id="count">0</span>)</div>
+      <div id="btn-heatmap" class="toggle-btn" onclick="toggleLayer('heatmap')">🔥 Heatmap</div>
+      <div id="btn-vols" class="toggle-btn" onclick="toggleLayer('vols')">🏃 Volunteers</div>
+      <div id="btn-routes" class="toggle-btn" onclick="toggleLayer('routes')">🔗 Routes</div>
+      <div id="btn-ngos" class="toggle-btn" onclick="toggleLayer('ngos')">🏢 NGOs</div>
+      <div id="btn-reports" class="toggle-btn" onclick="toggleLayer('reports')">⚠️ Reports</div>
     </div>
   </div>
 
