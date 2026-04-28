@@ -1,4 +1,4 @@
-const API_BASE = '/api';
+const API_BASE = window.API_BASE || document.querySelector('meta[name="api-base"]')?.content || '/api';
 
 // ── Auth ─────────────────────────────────────────
 const Auth = {
@@ -22,6 +22,25 @@ const Auth = {
   },
 
   isLoggedIn() { return !!this.getToken(); },
+
+  async validateSession() {
+    const token = this.getToken();
+    const type = this.getUserType();
+    if (!token || !type) return false;
+
+    const endpoint = type === 'ngo' ? '/ngo/profile' : '/volunteer/profile';
+    try {
+      const res = await fetch(API_BASE + endpoint, {
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          Authorization: `Bearer ${token}`
+        }
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  },
 
   redirect() {
     const type = this.getUserType();

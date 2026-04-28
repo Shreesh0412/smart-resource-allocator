@@ -64,7 +64,13 @@
   <script>
     let currentRole = 'volunteer';
 
-    if (Auth.isLoggedIn()) Auth.redirect();
+    (async () => {
+      if (await Auth.validateSession()) {
+        Auth.redirect();
+      } else {
+        Auth.clear();
+      }
+    })();
 
     function setRole(role) {
       currentRole = role;
