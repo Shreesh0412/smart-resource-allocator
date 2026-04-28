@@ -28,6 +28,9 @@ app = Flask(
 )
 app.config.from_object(Config)
 
+# ✅ FIX FOR RENDER: Create the upload folder immediately so Gunicorn sees it
+os.makedirs(app.config.get("UPLOAD_FOLDER", "uploads"), exist_ok=True)
+
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 jwt = JWTManager(app)
 
@@ -164,6 +167,4 @@ def server_error(e):
 
 
 if __name__ == "__main__":
-    os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
-    # FIX: Removed the duplicate create_indexes() call from here
     app.run(debug=app.config.get("DEBUG", False), host="0.0.0.0", port=5000)
