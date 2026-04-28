@@ -99,3 +99,33 @@ def build_ngo_analytics(db, ngo_id: str) -> dict:
         "top_volunteers":        top_volunteers,
         "inefficiency_flags":    inefficiency_flags,
     }
+
+def build_homepage_stats(db) -> dict:
+    """
+    Platform-wide homepage stats for the landing page.
+    Keeps the landing page numbers in sync with the database.
+    """
+    from datetime import datetime
+
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+
+    urgent_tasks = db.tasks.count_documents({
+        "urgency": "urgent",
+        "status": {"$in": ["open", "assigned", "in_progress"]},
+    })
+
+    active_volunteers = db.volunteers.count_documents({
+        "status": "active",
+    })
+
+    completed_today = db.tasks.count_documents({
+        "status": "completed",
+        "completed_at": {"$gte": today_start},
+    })
+
+    return {
+        "urgent_tasks": urgent_tasks,
+        "active_volunteers": active_volunteers,
+        "completed_today": completed_today,
+        "generated_at": datetime.utcnow().isoformat(),
+    }
