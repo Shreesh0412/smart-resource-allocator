@@ -108,27 +108,34 @@ def geocode_pincode(pincode: str):
 
 
 def resolve_location_payload(payload: Dict, *, require_pincode: bool = False):
-    """Resolve location from pincode first; fall back to explicit lat/lng if present."""
+    """Resolve location from explicit lat/lng first; fall back to pincode geocoding if needed."""
     pincode = normalize_pincode(payload.get("pincode", ""))
-    if pincode:
-        lat, lng = geocode_pincode(pincode)
-        if lat is not None and lng is not None:
-            return {"lat": lat, "lng": lng, "pincode": pincode}
-        if require_pincode:
-            return {"error": "Could not resolve the provided pincode. Please enter a valid Indian pincode."}
-
+    
+    # 1. Try to use explicit lat/lng from the payload (frontend location)
     lat = payload.get("lat")
     lng = payload.get("lng")
+    
     if lat is not None and lng is not None:
         try:
+            # If we have valid coordinates, use them directly and skip the API!
             return {"lat": float(lat), "lng": float(lng), "pincode": pincode}
         except Exception:
             pass
 
+    # 2. If no explicit lat/lng is available, fallback to geocoding the pincode via API
+    if pincode:
+        geo_lat, geo_lng = geocode_pincode(pincode)
+        if geo_lat is not None and geo_lng is not None:
+            return {"lat": geo_lat, "lng": geo_lng, "pincode": pincode}
+        
+        if require_pincode:
+            return {"error": "Could not resolve the provided pincode. Please enter a valid Indian pincode."}
+
+    # 3. If neither was provided
     if require_pincode:
         return {"error": "Please provide a valid Indian pincode."}
+        
     return {"lat": None, "lng": None, "pincode": pincode}
-
 
 # ── Task Urgency ───────────────────────────────────────────────────────────────
 
