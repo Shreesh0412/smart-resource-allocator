@@ -166,6 +166,40 @@ def all_reports():
     return jsonify({"reports": serialize_list(reports)}), 200
 
 
+# ── Public Homepage Stats ─────────────────────────────────────────────────────
+
+@admin_bp.route("/homepage-stats", methods=["GET"])
+def homepage_stats():
+    """
+    Public stats for the landing page hero cards.
+    No auth required so the homepage can render counts immediately.
+    """
+    db = current_app.db
+
+    urgent_tasks = db.tasks.count_documents({
+        "urgency": "urgent",
+        "status": {"$in": ["open", "assigned", "in_progress"]},
+    })
+
+    active_volunteers = db.volunteers.count_documents({
+        "status": "active",
+    })
+
+    from datetime import datetime
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+
+    completed_today = db.tasks.count_documents({
+        "status": "completed",
+        "completed_at": {"$gte": today_start},
+    })
+
+    return jsonify({
+        "urgent_tasks": urgent_tasks,
+        "active_volunteers": active_volunteers,
+        "completed_today": completed_today,
+    }), 200
+
+
 # ── Leaderboard (top volunteers by trust score) ───────────────────────────────
 
 @admin_bp.route("/leaderboard", methods=["GET"])
