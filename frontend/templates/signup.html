@@ -5,257 +5,290 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sign Up — Saarthi</title>
   <link rel="stylesheet" href="/static/css/main.css">
+  
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
   <style>
-    .skill-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-    .skill-tag {
-      padding: 4px 12px;
-      border-radius: 100px;
+    .auth-page {
+      min-height: 100vh;
+      padding: 48px 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+    }
+    .auth-bg {
+      position: fixed; inset: 0;
+      background:
+        radial-gradient(ellipse 50% 50% at 30% 30%, rgba(124,77,255,0.06) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 60% at 70% 70%, rgba(0,188,212,0.05) 0%, transparent 60%);
+      pointer-events: none;
+    }
+    .auth-card {
+      background: var(--card);
       border: 1px solid var(--border);
-      font-size: 0.8rem; cursor: pointer;
-      color: var(--text-muted);
+      border-radius: var(--radius-lg);
+      padding: 40px;
+      width: 100%;
+      max-width: 550px;
+      position: relative;
+      z-index: 2;
+      box-shadow: var(--shadow-lg);
+    }
+    
+    .role-toggle {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+    .role-btn {
+      flex: 1;
+      padding: 12px;
+      text-align: center;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-weight: 600;
       transition: all var(--anim-fast);
-      user-select: none;
+      background: var(--surface);
+      color: var(--text-dim);
     }
-    .skill-tag.selected {
+    .role-btn.active {
       background: var(--orange-glow);
-      border-color: var(--orange);
       color: var(--orange);
+      border-color: var(--orange);
     }
-    .auth-card { max-width: 560px; }
+
+    /* NGO fields hidden by default */
+    .ngo-only {
+      display: none;
+    }
+    
+    #location-picker-map {
+      height: 250px; 
+      width: 100%; 
+      border-radius: var(--radius); 
+      border: 1px solid var(--border); 
+      margin-bottom: 5px; 
+      z-index: 1;
+    }
   </style>
 </head>
 <body>
-  <div class="auth-bg"></div>
+  <nav class="navbar">
+    <div class="container">
+      <a href="/index.html" class="nav-brand"><div class="dot"></div>SAARTHI</a>
+      <div class="nav-links">
+        <a href="/login.html" class="nav-link">Login</a>
+        <a href="/signup.html" class="btn btn-secondary btn-sm">Sign Up</a>
+      </div>
+    </div>
+  </nav>
 
   <div class="auth-page">
-    <div style="width:100%;max-width:560px;position:relative;z-index:2;">
-      <a href="/login.html" style="color:var(--text-muted);font-size:0.85rem;display:flex;align-items:center;gap:6px;margin-bottom:24px;">
-        ← Back to Login
-      </a>
+    <div class="auth-bg"></div>
 
-      <div class="auth-card fade-in">
-        <div class="auth-logo">SAARTHI</div>
-        <p class="auth-subtitle">Join the network. Create your account.</p>
+    <div style="text-align:center;max-width:520px;margin-bottom:32px;position:relative;z-index:2;" class="fade-in">
+      <h1 style="font-family:var(--font-display);font-size:2.4rem;letter-spacing:0.04em;margin-bottom:12px;">CREATE ACCOUNT</h1>
+      <p>Join Saarthi as a Volunteer or register your NGO to help manage urban relief operations.</p>
+    </div>
 
-        <div class="auth-toggle">
-          <button class="auth-toggle-btn active" id="toggle-volunteer" onclick="setRole('volunteer')">
-            🙋 Volunteer
-          </button>
-          <button class="auth-toggle-btn" id="toggle-ngo" onclick="setRole('ngo')">
-            🏢 NGO
-          </button>
-        </div>
-
-        <!-- ── Volunteer Signup Form ── -->
-        <form id="volunteer-form" onsubmit="handleVolunteerSignup(event)">
-          <div style="display:flex;flex-direction:column;gap:14px;">
-            <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">Full Name</label>
-                <input type="text" id="v-name" class="form-input" placeholder="Rahul Sharma" required>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Phone (for WhatsApp)</label>
-                <input type="tel" id="v-phone" class="form-input" placeholder="+91 98765 43210" required>
-              </div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Email</label>
-              <input type="email" id="v-email" class="form-input" placeholder="you@example.com" required>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">Password</label>
-                <input type="password" id="v-password" class="form-input" placeholder="Min. 8 characters" required minlength="8">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Confirm Password</label>
-                <input type="password" id="v-password2" class="form-input" placeholder="••••••••" required>
-              </div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Pincode</label>
-              <input type="text" id="v-pincode" class="form-input" placeholder="Enter your 6-digit Indian pincode" maxlength="6" inputmode="numeric" required>
-              <p class="form-hint">We use your pincode to place you on the India-only map.</p>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Skills (select all that apply)</label>
-              <div class="skill-tags" id="skill-tags">
-                <span class="skill-tag" data-skill="medical">🏥 Medical</span>
-                <span class="skill-tag" data-skill="teaching">📚 Teaching</span>
-                <span class="skill-tag" data-skill="driving">🚗 Driving</span>
-                <span class="skill-tag" data-skill="construction">🔨 Construction</span>
-                <span class="skill-tag" data-skill="cooking">👨‍🍳 Cooking</span>
-                <span class="skill-tag" data-skill="logistics">📦 Logistics</span>
-                <span class="skill-tag" data-skill="translation">🗣️ Translation</span>
-                <span class="skill-tag" data-skill="photography">📷 Photography</span>
-                <span class="skill-tag" data-skill="tech">💻 Tech</span>
-                <span class="skill-tag" data-skill="fundraising">💰 Fundraising</span>
-              </div>
-            </div>
-          </div>
-          <div id="v-error" class="form-error mt-2" style="display:none;"></div>
-          <button type="submit" class="btn btn-primary btn-full mt-6" id="v-btn">
-            Create Volunteer Account
-          </button>
-        </form>
-
-        <!-- ── NGO Signup Form ── -->
-        <form id="ngo-form" onsubmit="handleNGOSignup(event)" style="display:none;">
-          <div style="display:flex;flex-direction:column;gap:14px;">
-            <div class="form-group">
-              <label class="form-label">Organisation Name</label>
-              <input type="text" id="n-name" class="form-input" placeholder="Care Foundation" required>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">Email</label>
-                <input type="email" id="n-email" class="form-input" placeholder="info@ngo.org" required>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Phone</label>
-                <input type="tel" id="n-phone" class="form-input" placeholder="+91 98765 43210" required>
-              </div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Registration Number</label>
-              <input type="text" id="n-reg" class="form-input" placeholder="NGO/2024/XXXX" required>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">Password</label>
-                <input type="password" id="n-password" class="form-input" placeholder="Min. 8 characters" required minlength="8">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Confirm Password</label>
-                <input type="password" id="n-password2" class="form-input" placeholder="••••••••" required>
-              </div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Pincode</label>
-              <input type="text" id="n-pincode" class="form-input" placeholder="Enter organisation pincode" maxlength="6" inputmode="numeric" required>
-              <p class="form-hint">We will place your NGO using this Indian pincode.</p>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Focus Areas</label>
-              <div class="skill-tags" id="focus-tags">
-                <span class="skill-tag" data-skill="health">🏥 Health</span>
-                <span class="skill-tag" data-skill="education">📚 Education</span>
-                <span class="skill-tag" data-skill="food">🍱 Food</span>
-                <span class="skill-tag" data-skill="shelter">🏠 Shelter</span>
-                <span class="skill-tag" data-skill="disaster">🆘 Disaster Relief</span>
-                <span class="skill-tag" data-skill="environment">🌿 Environment</span>
-                <span class="skill-tag" data-skill="women">👩 Women Empowerment</span>
-                <span class="skill-tag" data-skill="children">👶 Children</span>
-              </div>
-            </div>
-          </div>
-          <div id="n-error" class="form-error mt-2" style="display:none;"></div>
-          <button type="submit" class="btn btn-primary btn-full mt-6" id="n-btn">
-            Register NGO
-          </button>
-        </form>
-
-        <div class="auth-footer">
-          Already have an account? <a href="/login.html">Sign in</a>
-        </div>
+    <div class="auth-card fade-in fade-in-delay-1">
+      
+      <div class="role-toggle">
+        <div class="role-btn active" id="btn-volunteer" onclick="setRole('volunteer')">🙋‍♂️ Volunteer</div>
+        <div class="role-btn" id="btn-ngo" onclick="setRole('ngo')">🏢 NGO</div>
       </div>
+
+      <div id="auth-error" class="form-error mt-2 mb-4" style="display:none; text-align:center;"></div>
+
+      <form id="signup-form" onsubmit="handleSignup(event)">
+        
+        <div class="form-group">
+          <label class="form-label" id="name-label">Full Name *</label>
+          <input type="text" id="name" class="form-input" placeholder="Rahul Kumar" required>
+        </div>
+
+        <div class="form-group mt-4">
+          <label class="form-label">Email Address *</label>
+          <input type="email" id="email" class="form-input" placeholder="rahul@example.com" required>
+        </div>
+
+        <div class="form-group mt-4">
+          <label class="form-label">Password *</label>
+          <input type="password" id="password" class="form-input" placeholder="Create a strong password" required minlength="6">
+        </div>
+
+        <div class="form-group mt-4">
+          <label class="form-label">Phone Number *</label>
+          <input type="tel" id="phone" class="form-input" placeholder="+91 98765 43210" required>
+        </div>
+
+        <div class="form-group mt-4 ngo-only">
+          <label class="form-label">Registration Number *</label>
+          <input type="text" id="registration_number" class="form-input" placeholder="e.g. NGO-12345678">
+        </div>
+
+        <div class="form-group mt-6">
+          <label class="form-label">Set Your Base Location *</label>
+          <div id="location-picker-map"></div>
+          <p style="font-size: 0.75rem; color: var(--text-dim); margin-top: 8px;">Drag the pin to set your exact location. This helps us match you with nearby tasks.</p>
+          
+          <input type="hidden" id="latitude" required>
+          <input type="hidden" id="longitude" required>
+        </div>
+
+        <div class="form-group mt-4">
+          <label class="form-label">Pincode *</label>
+          <input type="text" id="pincode" class="form-input" placeholder="Enter 6-digit pincode" maxlength="6" inputmode="numeric" required>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-full mt-6" id="submit-btn">Create Account</button>
+      </form>
+
+      <p style="text-align:center; font-size: 0.85rem; margin-top: 24px; color: var(--text-muted);">
+        Already have an account? <a href="/login.html" style="color: var(--orange); text-decoration: none; font-weight: 600;">Log in here</a>
+      </p>
+
     </div>
   </div>
 
   <div id="toast-container"></div>
+  
   <script src="/static/js/api.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     let currentRole = 'volunteer';
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('type') === 'ngo') setRole('ngo');
+    let pickerMap = null;
+    let pickerMarker = null;
 
-    // Skill tag toggle
-    document.querySelectorAll('.skill-tag').forEach(tag => {
-      tag.addEventListener('click', () => tag.classList.toggle('selected'));
-    });
-
-    function getSelectedSkills(containerId) {
-      return [...document.querySelectorAll(`#${containerId} .skill-tag.selected`)]
-        .map(t => t.dataset.skill);
-    }
-
+    // Toggle between Volunteer and NGO fields
     function setRole(role) {
       currentRole = role;
-      document.getElementById('toggle-volunteer').classList.toggle('active', role === 'volunteer');
-      document.getElementById('toggle-ngo').classList.toggle('active', role === 'ngo');
-      document.getElementById('volunteer-form').style.display = role === 'volunteer' ? 'block' : 'none';
-      document.getElementById('ngo-form').style.display       = role === 'ngo'       ? 'block' : 'none';
+      
+      document.getElementById('btn-volunteer').classList.remove('active');
+      document.getElementById('btn-ngo').classList.remove('active');
+      document.getElementById(`btn-${role}`).classList.add('active');
+
+      const ngoFields = document.querySelectorAll('.ngo-only');
+      const nameLabel = document.getElementById('name-label');
+      const regInput = document.getElementById('registration_number');
+
+      if (role === 'ngo') {
+        ngoFields.forEach(f => f.style.display = 'block');
+        nameLabel.textContent = 'NGO Name *';
+        regInput.setAttribute('required', 'true');
+      } else {
+        ngoFields.forEach(f => f.style.display = 'none');
+        nameLabel.textContent = 'Full Name *';
+        regInput.removeAttribute('required');
+      }
     }
 
-    async function handleVolunteerSignup(e) {
-      e.preventDefault();
-      const btn   = document.getElementById('v-btn');
-      const errEl = document.getElementById('v-error');
+    // Map Initialization
+    document.addEventListener("DOMContentLoaded", function() {
+      const defaultLat = 20.5937; // Center of India
+      const defaultLng = 78.9629; 
 
-      const password  = document.getElementById('v-password').value;
-      const password2 = document.getElementById('v-password2').value;
-      if (password !== password2) {
-        errEl.textContent = 'Passwords do not match.';
+      pickerMap = L.map('location-picker-map').setView([defaultLat, defaultLng], 5);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap'
+      }).addTo(pickerMap);
+
+      function updateCoords(lat, lng) {
+        document.getElementById('latitude').value = lat;
+        document.getElementById('longitude').value = lng;
+        
+        if (pickerMarker) {
+          pickerMarker.setLatLng([lat, lng]);
+        } else {
+          pickerMarker = L.marker([lat, lng], {draggable: true}).addTo(pickerMap);
+          pickerMarker.on('dragend', function() {
+            const pos = pickerMarker.getLatLng();
+            updateCoords(pos.lat, pos.lng);
+          });
+        }
+      }
+
+      // Auto-Locate User
+      if ("geolocation" in navigator) {
+        navigator.geolocation.getCurrentPosition(function(pos) {
+          const uLat = pos.coords.latitude;
+          const uLng = pos.coords.longitude;
+          pickerMap.setView([uLat, uLng], 15);
+          updateCoords(uLat, uLng);
+        });
+      }
+
+      pickerMap.on('click', function(e) {
+        updateCoords(e.latlng.lat, e.latlng.lng);
+      });
+      
+      // Fix rendering in some browsers
+      setTimeout(() => pickerMap.invalidateSize(), 300);
+    });
+
+    // Handle form submission
+    async function handleSignup(e) {
+      e.preventDefault();
+      
+      const btn = document.getElementById('submit-btn');
+      const errEl = document.getElementById('auth-error');
+      errEl.style.display = 'none';
+
+      const lat = document.getElementById('latitude').value;
+      const lng = document.getElementById('longitude').value;
+      
+      if (!lat || !lng) {
+        errEl.textContent = 'Please place a pin on the map to set your location.';
         errEl.style.display = 'block';
         return;
       }
 
-      btn.disabled = true; btn.textContent = 'Creating account…';
-      errEl.style.display = 'none';
+      btn.disabled = true;
+      btn.textContent = 'Creating Account...';
 
-      try {
-        const data = await api.volunteerSignup({
-          name:         document.getElementById('v-name').value,
-          email:        document.getElementById('v-email').value,
-          password,
-          phone:        document.getElementById('v-phone').value,
-          pincode:      document.getElementById('v-pincode').value.trim(),
-          skills:       getSelectedSkills('skill-tags'),
-        });
-        Auth.save({ ...data, type: 'volunteer' });
-        showToast('Account created! Welcome to Saarthi 🎉', 'success');
-        setTimeout(() => window.location.href = '/volunteer-dashboard.html', 1000);
-      } catch(err) {
-        errEl.textContent = err.message;
-        errEl.style.display = 'block';
-        btn.disabled = false; btn.textContent = 'Create Volunteer Account';
-      }
-    }
+      // Build the payload
+      const payload = {
+        name: document.getElementById('name').value.trim(),
+        email: document.getElementById('email').value.trim(),
+        password: document.getElementById('password').value,
+        phone: document.getElementById('phone').value.trim(),
+        pincode: document.getElementById('pincode').value.trim(),
+        lat: parseFloat(lat),
+        lng: parseFloat(lng)
+      };
 
-    async function handleNGOSignup(e) {
-      e.preventDefault();
-      const btn   = document.getElementById('n-btn');
-      const errEl = document.getElementById('n-error');
-
-      const password  = document.getElementById('n-password').value;
-      const password2 = document.getElementById('n-password2').value;
-      if (password !== password2) {
-        errEl.textContent = 'Passwords do not match.';
-        errEl.style.display = 'block';
-        return;
+      if (currentRole === 'ngo') {
+        payload.registration_number = document.getElementById('registration_number').value.trim();
       }
 
-      btn.disabled = true; btn.textContent = 'Registering…';
-      errEl.style.display = 'none';
+      const endpoint = currentRole === 'ngo' ? '/auth/ngo/signup' : '/auth/volunteer/signup';
 
       try {
-        const data = await api.ngoSignup({
-          name:                document.getElementById('n-name').value,
-          email:               document.getElementById('n-email').value,
-          password,
-          phone:               document.getElementById('n-phone').value,
-          registration_number: document.getElementById('n-reg').value,
-          pincode:             document.getElementById('n-pincode').value.trim(),
-          focus_areas:         getSelectedSkills('focus-tags'),
+        const res = await api.json(endpoint, {
+          method: 'POST',
+          body: JSON.stringify(payload)
         });
-        Auth.save({ ...data, type: 'ngo' });
-        showToast('NGO registered! Redirecting to dashboard…', 'success');
-        setTimeout(() => window.location.href = '/ngo-dashboard.html', 1000);
-      } catch(err) {
-        errEl.textContent = err.message;
+
+        // Store tokens securely (adjust based on your api.js token handling)
+        localStorage.setItem('access_token', res.access_token);
+        if (res.refresh_token) {
+          localStorage.setItem('refresh_token', res.refresh_token);
+        }
+
+        showToast('Account created successfully!', 'success');
+        
+        // Redirect to respective dashboard
+        setTimeout(() => {
+          window.location.href = currentRole === 'ngo' ? '/ngo-dashboard.html' : '/volunteer-dashboard.html';
+        }, 1500);
+
+      } catch (err) {
+        errEl.textContent = err.message || 'Signup failed. Please try again.';
         errEl.style.display = 'block';
-        btn.disabled = false; btn.textContent = 'Register NGO';
+        btn.disabled = false;
+        btn.textContent = 'Create Account';
       }
     }
   </script>

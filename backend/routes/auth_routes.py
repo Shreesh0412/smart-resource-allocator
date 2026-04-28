@@ -15,6 +15,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 from models.schemas import volunteer_schema, ngo_schema, problem_report_schema
 from utils.helpers import is_valid_email, resolve_location_payload
+from services.task_predictor import extract_resources
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -219,6 +220,9 @@ def report_problem():
     if loc.get("error"):
         return jsonify({"error": loc["error"]}), 400
 
+    # ✨ Ask Gemini to extract resources from the user's description
+    extracted = extract_resources(data["description"], current_app.config)
+
     doc = problem_report_schema(
         reporter_name         = data["reporter_name"],
         reporter_contact      = data["reporter_contact"],
@@ -230,9 +234,11 @@ def report_problem():
         urgency_self_reported = data.get("urgency", "low"),
         media_urls            = data.get("media_urls", []),
         pincode               = loc.get("pincode", data.get("pincode", "")),
+        extracted_resources   = extracted, # ✨ Pass it to the database
     )
     result = db.problem_reports.insert_one(doc)
     return jsonify({
         "message":   "Problem reported. It will be reviewed by a local NGO.",
         "report_id": str(result.inserted_id),
+        "extracted": extracted
     }), 201

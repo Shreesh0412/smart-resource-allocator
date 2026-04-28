@@ -2,10 +2,11 @@
 services/task_predictor.py
 --------------------------
 Uses Google Gemini AI to read task context (descriptions, urgency, volunteer counts)
-and accurately predict the risk of a task failing or missing its deadline.
+to predict risk, and automatically extracts structured resource requirements from natural language.
 """
 
 import os
+import json
 import google.generativeai as genai
 
 def init_gemini(config):
@@ -20,16 +21,13 @@ def predict_task_risk(db, task, config):
     """
     Analyzes task details using Gemini and returns "on_track", "at_risk", or "critical".
     """
-    # 1. Check if Gemini is configured
     if not init_gemini(config):
         print("WARNING: Gemini API Key missing. Falling back to basic math predictor.")
-        # Fallback logic if API key isn't set up
         vol_ratio = len(task.get("assigned_volunteers", [])) / max(1, task.get("volunteers_needed", 1))
         if vol_ratio == 0 and task.get("urgency") == "urgent": return "critical"
         elif vol_ratio < 1.0: return "at_risk"
         return "on_track"
 
-    # 2. Extract context for the AI
     title = task.get('title', 'Unknown Task')
     desc = task.get('description', 'No description provided.')
     urgency = task.get('urgency', 'low')
@@ -37,7 +35,6 @@ def predict_task_risk(db, task, config):
     assigned = len(task.get('assigned_volunteers', []))
     deadline = task.get('deadline', 'Unknown')
 
-    # 3. Create the prompt for Gemini
     prompt = f"""
     You are an AI assistant managing an NGO disaster relief and resource allocation system.
     Analyze the following task and determine its completion risk.
@@ -57,15 +54,11 @@ def predict_task_risk(db, task, config):
     critical
     """
 
-    # 4. Call Gemini 1.5 Flash (Fast & cheap, perfect for quick data tagging)
     try:
         model = genai.GenerativeModel('gemini-1.5-flash')
         response = model.generate_content(prompt)
-        
-        # Clean up the AI's response to match our database enums
         result = response.text.strip().lower()
         
-        # Ensure it only returns the exact strings our frontend expects
         if "critical" in result:
             return "critical"
         elif "at_risk" in result or "risk" in result:
@@ -75,4 +68,41 @@ def predict_task_risk(db, task, config):
             
     except Exception as e:
         print(f"Gemini AI Error: {e}")
-        return "at_risk" # Safe default if the API call fails
+        return "at_risk" 
+
+def extract_resources(description, config):
+    """
+    Uses Gemini to read a problem description and extract needed resources 
+    into a structured JSON format.
+    """
+    if not init_gemini(config) or not description:
+        return {}
+
+    prompt = f"""
+    Read the following emergency report description. Extract any physical resources or items 
+    that the person is requesting or that are clearly needed. 
+    
+    Description: "{description}"
+    
+    Return the result strictly as a raw JSON object where the keys are the item names 
+    (snake_case, lowercase) and the values are the quantities (integers). If no quantity is specified, use 1.
+    If no resources are mentioned, return an empty JSON object {{}}.
+    
+    Example: {{"water_bottles": 50, "blankets": 10, "first_aid_kits": 2}}
+    
+    Do not include markdown formatting like ```json or anything else. Just the raw JSON.
+    """
+
+    try:
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = model.generate_content(prompt)
+        
+        # Clean up the response in case the AI added markdown block ticks
+        raw_text = response.text.strip().removeprefix('```json').removesuffix('```').strip()
+        
+        # Parse the string into a Python dictionary
+        extracted_data = json.loads(raw_text)
+        return extracted_data
+    except Exception as e:
+        print(f"Resource Extraction Error: {e}")
+        return {}

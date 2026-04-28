@@ -10,6 +10,10 @@ document.getElementById('nav-name').textContent = Auth.getUserName() || 'NGO';
 let currentPanel = 'overview';
 let selectedRating = 0;
 
+// ✨ NEW: Map Variables
+let postTaskMap = null;
+let postTaskMarker = null;
+
 // ── Panel Navigation ──────────────────────────────────────────
 function showPanel(name) {
   document.querySelectorAll('[id^="panel-"]').forEach(p => p.style.display = 'none');
@@ -23,7 +27,7 @@ function showPanel(name) {
 
   const loaders = {
     overview:      loadOverview,
-    'post-task':   () => {},
+    'post-task':   initPostTaskMap, // ✨ Trigger map init when tab opens
     active:        loadActive,
     completed:     loadCompleted,
     reports:       loadReports,
@@ -32,6 +36,53 @@ function showPanel(name) {
     inefficiency:  loadInefficiency,
   };
   if (loaders[name]) loaders[name]();
+}
+
+// ✨ NEW: Map Initialization
+function initPostTaskMap() {
+  if (postTaskMap) {
+    // Already initialized, just fix sizing since it was hidden
+    setTimeout(() => postTaskMap.invalidateSize(), 100);
+    return;
+  }
+  
+  const defaultLat = 20.5937; // India Center
+  const defaultLng = 78.9629;
+  
+  postTaskMap = L.map('task-picker-map').setView([defaultLat, defaultLng], 5);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap'
+  }).addTo(postTaskMap);
+
+  function updateCoords(lat, lng) {
+    document.getElementById('t-lat').value = lat;
+    document.getElementById('t-lng').value = lng;
+    if (postTaskMarker) {
+      postTaskMarker.setLatLng([lat, lng]);
+    } else {
+      postTaskMarker = L.marker([lat, lng], {draggable: true}).addTo(postTaskMap);
+      postTaskMarker.on('dragend', function() {
+        const pos = postTaskMarker.getLatLng();
+        updateCoords(pos.lat, pos.lng);
+      });
+    }
+  }
+
+  // Auto locate if allowed
+  if ("geolocation" in navigator) {
+    navigator.geolocation.getCurrentPosition(function(pos) {
+      const uLat = pos.coords.latitude;
+      const uLng = pos.coords.longitude;
+      postTaskMap.setView([uLat, uLng], 15);
+      updateCoords(uLat, uLng);
+    });
+  }
+
+  postTaskMap.on('click', function(e) {
+    updateCoords(e.latlng.lat, e.latlng.lng);
+  });
+
+  setTimeout(() => postTaskMap.invalidateSize(), 100);
 }
 
 // ── Skill tag toggle (post task form) ────────────────────────
@@ -98,7 +149,7 @@ async function loadOverview() {
     document.getElementById('ov-urgent').textContent = urgent;
 
     // Check pending reports
-    const reports = await json('/ngo/reports')
+    const reports = await api.json('/ngo/reports'); // Fixed standard JSON call
     const pending = (reports.reports || []).length;
     if (pending > 0) {
       const badge = document.getElementById('reports-count');
@@ -174,6 +225,16 @@ async function postTask(e) {
   const btn   = document.getElementById('post-btn');
   const errEl = document.getElementById('post-error');
   errEl.style.display = 'none';
+
+  // ✨ Ensure a location was selected
+  const latVal = document.getElementById('t-lat').value;
+  const lngVal = document.getElementById('t-lng').value;
+  if (!latVal || !lngVal) {
+    errEl.textContent = "Please set the exact location on the map.";
+    errEl.style.display = 'block';
+    return;
+  }
+
   btn.disabled = true;
   btn.textContent = 'Posting & matching…';
 
@@ -188,6 +249,9 @@ async function postTask(e) {
       address:           document.getElementById('t-address').value,
       pincode:           document.getElementById('t-pincode').value.trim(),
       required_skills:   getSelectedSkills(),
+      // ✨ Send actual map coordinates
+      lat:               parseFloat(latVal),
+      lng:               parseFloat(lngVal)
     };
 
     const data = await api.postTask(payload);
@@ -343,7 +407,7 @@ async function loadReports() {
   const el = document.getElementById('reports-list');
   el.innerHTML = '<div class="loader"><div class="spinner"></div></div>';
   try {
-    const data = await json('/ngo/reports')
+    const data = await api.json('/ngo/reports'); // Fixed api.json wrapper
     if (!data.reports?.length) {
       el.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>No pending reports in your area.</p></div>';
       return;
@@ -610,7 +674,6 @@ async function openNGOTaskModal(taskId) {
           <div class="score-bar"><div class="score-lbl">Address</div><div style="font-weight:600;font-size:0.85rem;">${t.address||'—'}</div></div>
         </div>
 
-        <!-- Proof of Work -->
         ${t.proof_of_work?.length ? `
           <div>
             <div style="font-size:0.75rem;font-weight:700;color:var(--text-dim);text-transform:uppercase;margin-bottom:8px;">Proof of Work</div>

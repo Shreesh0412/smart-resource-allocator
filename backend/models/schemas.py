@@ -175,6 +175,7 @@ def problem_report_schema(
     urgency_self_reported: str = "low",
     media_urls: List[str] = None,
     pincode: str = "",
+    extracted_resources: Dict = None,
 ) -> Dict:
     return {
         "reporter_name":        reporter_name,
@@ -188,6 +189,7 @@ def problem_report_schema(
         "urgency_self_reported":urgency_self_reported,
         "pincode":              pincode or "",
         "media_urls":           media_urls or [],
+        "extracted_resources":  extracted_resources or {},
 
         # Approval flow
         "status":               "pending",   # pending|approved|rejected|converted_to_task

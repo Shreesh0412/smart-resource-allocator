@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NGO Dashboard — Saarthi</title>
   <link rel="stylesheet" href="/static/css/main.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     .urgency-board { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
     .urgency-col {
@@ -90,7 +91,6 @@
   </style>
 </head>
 <body>
-  <!-- Navbar -->
   <nav class="navbar">
     <div class="container">
       <a href="/index.html" class="nav-brand"><div class="dot"></div>SAARTHI</a>
@@ -107,7 +107,6 @@
   </nav>
 
   <div class="dashboard-layout">
-    <!-- Sidebar -->
     <aside class="sidebar">
       <div class="sidebar-section">
         <div class="sidebar-label">Dashboard</div>
@@ -144,10 +143,8 @@
       </div>
     </aside>
 
-    <!-- Main -->
     <main class="main-content">
 
-      <!-- ── Overview ── -->
       <div id="panel-overview">
         <div style="margin-bottom:28px;">
           <h2 style="font-family:var(--font-display);letter-spacing:0.04em;" id="ngo-title">Dashboard</h2>
@@ -173,7 +170,6 @@
           </div>
         </div>
 
-        <!-- Urgency board -->
         <div class="card mb-4">
           <div class="card-header">
             <span class="card-title">📌 Task Urgency Board</span>
@@ -185,7 +181,6 @@
         </div>
       </div>
 
-      <!-- ── Post a Need ── -->
       <div id="panel-post-task" style="display:none;">
         <div class="section-header">
           <div class="section-title">➕ Post a Community Need</div>
@@ -236,6 +231,15 @@
                 <input type="datetime-local" id="t-deadline" class="form-input" required>
               </div>
             </div>
+
+            <div class="form-group mt-2">
+              <label class="form-label">Task Location (Exact Spot) *</label>
+              <div id="task-picker-map" style="height: 250px; width: 100%; border-radius: var(--radius); border: 1px solid var(--border); margin-bottom: 5px; z-index: 1;"></div>
+              <p class="form-hint">Drag the pin to set the exact task location for accurate volunteer matching.</p>
+              <input type="hidden" id="t-lat" required>
+              <input type="hidden" id="t-lng" required>
+            </div>
+
             <div class="form-group">
               <label class="form-label">Address / Description</label>
               <input type="text" id="t-address" class="form-input" placeholder="Plot 12, Sector 5, Meerut">
@@ -265,7 +269,6 @@
         </div>
       </div>
 
-      <!-- ── Active Tasks ── -->
       <div id="panel-active" style="display:none;">
         <div class="section-header">
           <div class="section-title">⚡ Active Requests</div>
@@ -276,7 +279,6 @@
         </div>
       </div>
 
-      <!-- ── Completed Tasks ── -->
       <div id="panel-completed" style="display:none;">
         <div class="section-header">
           <div class="section-title">✅ Completed Tasks</div>
@@ -291,7 +293,6 @@
         </div>
       </div>
 
-      <!-- ── Community Reports Queue ── -->
       <div id="panel-reports" style="display:none;">
         <div class="section-header">
           <div class="section-title">📣 Community Problem Reports</div>
@@ -303,7 +304,6 @@
         </div>
       </div>
 
-      <!-- ── Resource Manager ── -->
       <div id="panel-resources" style="display:none;">
         <div class="section-header">
           <div class="section-title">📦 Resource Manager</div>
@@ -314,7 +314,6 @@
         </div>
       </div>
 
-      <!-- ── Analytics ── -->
       <div id="panel-analytics" style="display:none;">
         <div class="section-header">
           <div class="section-title">📈 Analytics Dashboard</div>
@@ -325,7 +324,6 @@
         </div>
       </div>
 
-      <!-- ── Inefficiency Reports ── -->
       <div id="panel-inefficiency" style="display:none;">
         <div class="section-header">
           <div class="section-title">🔍 Travel Inefficiency Reports</div>
@@ -339,7 +337,6 @@
     </main>
   </div>
 
-  <!-- ── Task Detail Modal (NGO view) ── -->
   <div class="modal-overlay" id="ngo-task-modal" style="display:none;">
     <div class="modal" style="max-width:640px;">
       <div class="modal-header">
@@ -350,7 +347,6 @@
     </div>
   </div>
 
-  <!-- ── Add Resource Modal ── -->
   <div class="modal-overlay" id="add-resource-modal" style="display:none;">
     <div class="modal">
       <div class="modal-header">
@@ -388,7 +384,6 @@
     </div>
   </div>
 
-  <!-- Review Volunteer Modal -->
   <div class="modal-overlay" id="review-modal" style="display:none;">
     <div class="modal">
       <div class="modal-header">
@@ -418,6 +413,7 @@
 
   <div id="toast-container"></div>
   <script src="/static/js/api.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="/static/js/ngo.js"></script>
 </body>
 </html>
