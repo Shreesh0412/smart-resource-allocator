@@ -181,12 +181,18 @@ def homepage_stats():
         "status": {"$in": ["open", "assigned", "in_progress"]},
     })
 
+    # FIX: Count volunteers who are NOT banned/inactive rather than requiring
+    # an explicit "active" status — new volunteers may not have the field set yet.
     active_volunteers = db.volunteers.count_documents({
-        "status": "active",
+        "status": {"$nin": ["banned", "inactive"]},
     })
 
-    from datetime import datetime
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    # FIX: utcnow() stores ISO strings in MongoDB, so compare with a string too.
+    # Using a datetime object here would be a type mismatch and always return 0.
+    from datetime import datetime, timezone
+    today_start = datetime.now(timezone.utc).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    ).isoformat()
 
     completed_today = db.tasks.count_documents({
         "status": "completed",
