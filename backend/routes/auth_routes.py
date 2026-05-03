@@ -1,16 +1,28 @@
 """
-routes/auth_routes.py  — FIXED
-Key change: identity is now a plain string (the MongoDB _id),
-and user_type is stored as an additional JWT claim.
-This is the recommended approach for flask-jwt-extended 4.x
-and fixes the dict-identity "Invalid token" (422) bug.
+routes/auth_routes.py
+FIXES:
+  S4 — Rate limiting on all login and public report endpoints.
+  S5 — Tokens are now set as HttpOnly cookies (not returned in JSON body).
+       HttpOnly cookies cannot be read by JavaScript, so XSS attacks cannot
+       steal them. Access and refresh tokens are completely invisible to JS.
+
+       New endpoint: POST /auth/logout — clears the HttpOnly cookies.
+
+       config.py must have:
+         JWT_TOKEN_LOCATION      = ["cookies"]
+         JWT_COOKIE_SECURE       = True   (HTTPS only; False for local dev)
+         JWT_COOKIE_SAMESITE     = "Strict"
+         JWT_COOKIE_CSRF_PROTECT = False  (XSS fixed in S2; CSRF via SameSite=Strict)
 """
 
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, make_response, current_app
 from flask_jwt_extended import (
     create_access_token, create_refresh_token,
-    jwt_required, get_jwt_identity, get_jwt
+    jwt_required, get_jwt_identity, get_jwt,
+    set_access_cookies, set_refresh_cookies, unset_jwt_cookies,
 )
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from models.schemas import volunteer_schema, ngo_schema, problem_report_schema
@@ -19,22 +31,32 @@ from services.task_predictor import extract_resources
 
 auth_bp = Blueprint("auth", __name__)
 
+# S4: module-level limiter — init_app() is called in app.py
+limiter = Limiter(get_remote_address)
+
 
 def _make_tokens(user_id: str, user_type: str):
-    """
-    Create access + refresh tokens.
-    identity  = plain string MongoDB _id  (reliable in flask-jwt-extended 4.x)
-    user_type = stored as additional claim (avoids dict-identity 422 bug)
-    """
     claims  = {"user_type": user_type}
     access  = create_access_token(identity=str(user_id), additional_claims=claims)
     refresh = create_refresh_token(identity=str(user_id), additional_claims=claims)
     return access, refresh
 
 
+def _auth_response(payload: dict, access_token: str, refresh_token: str, status: int):
+    """
+    S5 FIX: Sets access and refresh tokens as HttpOnly cookies instead of
+    returning them in the JSON body. JSON only contains non-sensitive UI data.
+    """
+    resp = make_response(jsonify(payload), status)
+    set_access_cookies(resp, access_token)
+    set_refresh_cookies(resp, refresh_token)
+    return resp
+
+
 # ── Volunteer Signup ──────────────────────────────────────────────────────────
 
 @auth_bp.route("/volunteer/signup", methods=["POST"])
+@limiter.limit("10 per minute")
 def volunteer_signup():
     db   = current_app.db
     data = request.get_json(silent=True) or {}
@@ -67,22 +89,20 @@ def volunteer_signup():
     )
     result = db.volunteers.insert_one(doc)
     vid    = str(result.inserted_id)
-
     access_token, refresh_token = _make_tokens(vid, "volunteer")
 
-    return jsonify({
-        "message":       "Volunteer registered successfully",
-        "id":            vid,
-        "type":          "volunteer",
-        "name":          data["name"],
-        "access_token":  access_token,
-        "refresh_token": refresh_token,
-    }), 201
+    return _auth_response({
+        "message": "Volunteer registered successfully",
+        "id":      vid,
+        "type":    "volunteer",
+        "name":    data["name"],
+    }, access_token, refresh_token, 201)
 
 
 # ── Volunteer Login ───────────────────────────────────────────────────────────
 
 @auth_bp.route("/volunteer/login", methods=["POST"])
+@limiter.limit("10 per minute")
 def volunteer_login():
     db   = current_app.db
     data = request.get_json(silent=True) or {}
@@ -100,21 +120,20 @@ def volunteer_login():
     vid = str(volunteer["_id"])
     access_token, refresh_token = _make_tokens(vid, "volunteer")
 
-    return jsonify({
-        "message":       "Login successful",
-        "id":            vid,
-        "type":          "volunteer",
-        "name":          volunteer["name"],
-        "trust_score":   volunteer.get("trust_score", 50),
-        "is_verified":   volunteer.get("is_verified", False),
-        "access_token":  access_token,
-        "refresh_token": refresh_token,
-    }), 200
+    return _auth_response({
+        "message":     "Login successful",
+        "id":          vid,
+        "type":        "volunteer",
+        "name":        volunteer["name"],
+        "trust_score": volunteer.get("trust_score", 50),
+        "is_verified": volunteer.get("is_verified", False),
+    }, access_token, refresh_token, 200)
 
 
 # ── NGO Signup ────────────────────────────────────────────────────────────────
 
 @auth_bp.route("/ngo/signup", methods=["POST"])
+@limiter.limit("10 per minute")
 def ngo_signup():
     db   = current_app.db
     data = request.get_json(silent=True) or {}
@@ -147,22 +166,20 @@ def ngo_signup():
     )
     result = db.ngos.insert_one(doc)
     nid    = str(result.inserted_id)
-
     access_token, refresh_token = _make_tokens(nid, "ngo")
 
-    return jsonify({
-        "message":       "NGO registered successfully",
-        "id":            nid,
-        "type":          "ngo",
-        "name":          data["name"],
-        "access_token":  access_token,
-        "refresh_token": refresh_token,
-    }), 201
+    return _auth_response({
+        "message": "NGO registered successfully",
+        "id":      nid,
+        "type":    "ngo",
+        "name":    data["name"],
+    }, access_token, refresh_token, 201)
 
 
 # ── NGO Login ─────────────────────────────────────────────────────────────────
 
 @auth_bp.route("/ngo/login", methods=["POST"])
+@limiter.limit("10 per minute")
 def ngo_login():
     db   = current_app.db
     data = request.get_json(silent=True) or {}
@@ -180,15 +197,13 @@ def ngo_login():
     nid = str(ngo["_id"])
     access_token, refresh_token = _make_tokens(nid, "ngo")
 
-    return jsonify({
-        "message":       "Login successful",
-        "id":            nid,
-        "type":          "ngo",
-        "name":          ngo["name"],
-        "is_verified":   ngo.get("is_verified", False),
-        "access_token":  access_token,
-        "refresh_token": refresh_token,
-    }), 200
+    return _auth_response({
+        "message":     "Login successful",
+        "id":          nid,
+        "type":        "ngo",
+        "name":        ngo["name"],
+        "is_verified": ngo.get("is_verified", False),
+    }, access_token, refresh_token, 200)
 
 
 # ── Refresh Token ─────────────────────────────────────────────────────────────
@@ -196,17 +211,34 @@ def ngo_login():
 @auth_bp.route("/refresh", methods=["POST"])
 @jwt_required(refresh=True)
 def refresh():
-    user_id    = get_jwt_identity()           # plain string id
-    old_claims = get_jwt()                    # read user_type from existing claim
+    """S5: Browser sends the HttpOnly refresh_token cookie automatically."""
+    user_id    = get_jwt_identity()
+    old_claims = get_jwt()
     user_type  = old_claims.get("user_type", "volunteer")
 
-    access_token, _ = _make_tokens(user_id, user_type)
-    return jsonify({"access_token": access_token}), 200
+    new_access, _ = _make_tokens(user_id, user_type)
+    resp = make_response(jsonify({"message": "Token refreshed"}), 200)
+    set_access_cookies(resp, new_access)
+    return resp
 
 
-# ── Community Problem Report (no login required) ──────────────────────────────
+# ── Logout ────────────────────────────────────────────────────────────────────
+
+@auth_bp.route("/logout", methods=["POST"])
+def logout():
+    """
+    S5: Clears HttpOnly cookies server-side. The browser cannot clear HttpOnly
+    cookies itself — this endpoint is required. api.js Auth.logout() calls this.
+    """
+    resp = make_response(jsonify({"message": "Logged out"}), 200)
+    unset_jwt_cookies(resp)
+    return resp
+
+
+# ── Community Problem Report ──────────────────────────────────────────────────
 
 @auth_bp.route("/report-problem", methods=["POST"])
+@limiter.limit("20 per hour")
 def report_problem():
     db   = current_app.db
     data = request.get_json(silent=True) or {}
@@ -220,7 +252,6 @@ def report_problem():
     if loc.get("error"):
         return jsonify({"error": loc["error"]}), 400
 
-    # ✨ Ask Gemini to extract resources from the user's description
     extracted = extract_resources(data["description"], current_app.config)
 
     doc = problem_report_schema(
@@ -234,11 +265,11 @@ def report_problem():
         urgency_self_reported = data.get("urgency", "low"),
         media_urls            = data.get("media_urls", []),
         pincode               = loc.get("pincode", data.get("pincode", "")),
-        extracted_resources   = extracted, # ✨ Pass it to the database
+        extracted_resources   = extracted,
     )
     result = db.problem_reports.insert_one(doc)
     return jsonify({
         "message":   "Problem reported. It will be reviewed by a local NGO.",
         "report_id": str(result.inserted_id),
-        "extracted": extracted
+        "extracted": extracted,
     }), 201

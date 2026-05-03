@@ -1,12 +1,11 @@
 """
-routes/ngo_routes.py — FIXED
-- _current_ngo() uses plain string identity.
-- Reports route no longer crashes on missing/partial geo data.
-- Task creation is safer and supports pincode-based payloads.
-- JSON parsing is resilient with silent=True.
-- ObjectId conversions are guarded.
-- Fixed Error 2: `ngo` object is unpacked correctly in `review_report`.
-- Fixed Error 12: `active_requests` sorts urgency correctly via mapping.
+routes/ngo_routes.py
+FIXES:
+  B9 — review_report convert_to_task now requires a deadline before creating
+       a task. An empty deadline was being stored, breaking urgency calculation,
+       the task predictor, and deadline reminders.
+  S7 — get_pending_reports now masks reporter_contact (shows only last 4 chars)
+       so reporter PII is not fully exposed in the NGO dashboard.
 """
 
 from flask import Blueprint, request, jsonify, current_app
@@ -30,12 +29,10 @@ def _current_ngo():
     """Returns (ngo_doc, ngo_id_string)."""
     nid = get_jwt_identity()
     db = current_app.db
-
     try:
         doc = db.ngos.find_one({"_id": ObjectId(nid)})
     except Exception:
         return None, None
-
     return doc, nid
 
 
@@ -48,6 +45,20 @@ def _safe_object_ids(values):
         except Exception:
             continue
     return out
+
+
+# ── S7: PII masking helper ────────────────────────────────────────────────────
+def _mask_contact(contact: str) -> str:
+    """
+    Masks a phone/email so that only the last 4 characters are visible.
+    e.g. '+919876543210' → '••••••••3210'
+    e.g. 'rahul@example.com' → '••••••••••••.com'
+    """
+    if not contact:
+        return "—"
+    if len(contact) <= 4:
+        return "••••"
+    return "•" * (len(contact) - 4) + contact[-4:]
 
 
 # ── Profile ───────────────────────────────────────────────────────────────────
@@ -116,8 +127,6 @@ def post_task():
         required_skills=data.get("required_skills", []),
         resources_needed=data.get("resources_needed", []),
     )
-
-    # Keep pincode even if task_schema does not define it.
     doc["pincode"] = loc.get("pincode", data.get("pincode", ""))
 
     result = db.tasks.insert_one(doc)
@@ -150,7 +159,6 @@ def change_urgency(task_id):
         return jsonify({"error": "NGO not found"}), 404
 
     data = request.get_json(silent=True) or {}
-
     urgency = data.get("urgency", "").lower()
     if urgency not in ("low", "med", "urgent"):
         return jsonify({"error": "urgency must be 'low', 'med', or 'urgent'"}), 400
@@ -167,13 +175,10 @@ def change_urgency(task_id):
     if urgency == "urgent":
         for vol_id in task.get("assigned_volunteers", []):
             _notify(
-                db,
-                str(vol_id),
-                "volunteer",
+                db, str(vol_id), "volunteer",
                 "Task Urgency Escalated",
                 f"Task '{task['title']}' is now URGENT. Please act immediately.",
-                "urgency_escalated",
-                task_id
+                "urgency_escalated", task_id
             )
 
     return jsonify({"message": f"Urgency updated to {urgency}"}), 200
@@ -193,7 +198,6 @@ def active_requests():
         db.tasks.find({"ngo_id": nid, "status": {"$in": ["open", "assigned", "in_progress"]}})
     )
 
-    # FIX 12: Sort securely using a mapping logic instead of string alphabetical sort
     urgency_map = {"urgent": 3, "med": 2, "low": 1}
     tasks.sort(key=lambda x: urgency_map.get(x.get("urgency", "low"), 0), reverse=True)
 
@@ -286,13 +290,10 @@ def assign_volunteer(task_id, volunteer_id):
     db.ngos.update_one({"_id": ObjectId(nid)}, {"$inc": {"active_volunteers": 1}})
 
     _notify(
-        db,
-        volunteer_id,
-        "volunteer",
+        db, volunteer_id, "volunteer",
         "You have been assigned a task!",
         f"NGO {ngo['name']} assigned you to: {task['title']}. Accept or reject in the app.",
-        "task_assigned",
-        task_id
+        "task_assigned", task_id
     )
 
     from services.notification_service import send_whatsapp
@@ -359,23 +360,17 @@ def review_proof(task_id, volunteer_id):
         update_trust_score(db, volunteer_id, event="completed")
 
         _notify(
-            db,
-            volunteer_id,
-            "volunteer",
+            db, volunteer_id, "volunteer",
             "Proof Approved!",
             f"Your work on '{task['title']}' has been approved. Great job!",
-            "proof_approved",
-            task_id
+            "proof_approved", task_id
         )
     else:
         _notify(
-            db,
-            volunteer_id,
-            "volunteer",
+            db, volunteer_id, "volunteer",
             "Proof Rejected",
             f"Your proof for '{task['title']}' was rejected. Reason: {notes}",
-            "proof_rejected",
-            task_id
+            "proof_rejected", task_id
         )
 
     return jsonify({"message": "Proof reviewed", "approved": approved}), 200
@@ -425,13 +420,10 @@ def review_volunteer(volunteer_id):
     update_trust_score(db, volunteer_id, event="reviewed", rating=rating)
 
     _notify(
-        db,
-        volunteer_id,
-        "volunteer",
+        db, volunteer_id, "volunteer",
         "New Review",
         f"{ngo['name']} gave you {rating}/5 stars. {comment}",
-        "review",
-        task_id
+        "review", task_id
     )
 
     return jsonify({"message": "Review submitted", "new_avg_rating": avg}), 200
@@ -442,11 +434,6 @@ def review_volunteer(volunteer_id):
 @ngo_bp.route("/reports", methods=["GET"], strict_slashes=False)
 @ngo_required
 def get_pending_reports():
-    """
-    Safe version:
-    - avoids geo `$near` query that can crash when indexes/location data are missing
-    - returns pending reports in a predictable JSON shape
-    """
     db = current_app.db
     _, nid = _current_ngo()
     if not nid:
@@ -464,7 +451,9 @@ def get_pending_reports():
                 "status":               r.get("status", "pending"),
                 "urgency_self_reported":r.get("urgency_self_reported", "low"),
                 "reporter_name":        r.get("reporter_name", ""),
-                "reporter_contact":     r.get("reporter_contact", ""),
+                # FIX S7: Mask reporter contact so full phone/email is not
+                # exposed in the NGO dashboard — only last 4 chars are visible.
+                "reporter_contact":     _mask_contact(r.get("reporter_contact", "")),
                 "lat":                  r.get("lat"),
                 "lng":                  r.get("lng"),
                 "address":              r.get("address", ""),
@@ -482,15 +471,13 @@ def get_pending_reports():
 @ngo_required
 def review_report(report_id):
     db = current_app.db
-    # FIX 2: Correctly fetch ngo and nid so conversion doesn't crash
     ngo, nid = _current_ngo()
     if not nid:
         return jsonify({"error": "NGO not found"}), 404
 
     data = request.get_json(silent=True) or {}
-
     action = data.get("action")
-    note = data.get("note", "")
+    note   = data.get("note", "")
 
     report = db.problem_reports.find_one({"_id": to_oid(report_id)})
     if not report:
@@ -498,8 +485,8 @@ def review_report(report_id):
 
     update = {
         "reviewed_by_ngo_id": nid,
-        "ngo_review_note": note,
-        "reviewed_at": utcnow(),
+        "ngo_review_note":    note,
+        "reviewed_at":        utcnow(),
     }
 
     if action == "approve":
@@ -509,6 +496,13 @@ def review_report(report_id):
         update["status"] = "rejected"
 
     elif action == "convert_to_task":
+        # FIX B9: Require a deadline before creating the task.
+        # Previously an empty string was stored, breaking urgency calculation,
+        # the task predictor, and deadline reminder notifications.
+        deadline = data.get("deadline", "").strip()
+        if not deadline:
+            return jsonify({"error": "A deadline is required to convert a report to a task"}), 400
+
         task_doc = task_schema(
             ngo_id=nid,
             title=f"[Community Report] {report.get('problem_type', 'Issue')}",
@@ -517,7 +511,7 @@ def review_report(report_id):
             lat=float(report.get("lat", ngo.get("lat") if ngo else 0)),
             lng=float(report.get("lng", ngo.get("lng") if ngo else 0)),
             address=report.get("address", ""),
-            deadline=data.get("deadline", ""),
+            deadline=deadline,
             urgency=report.get("urgency_self_reported", "low"),
             volunteers_needed=int(data.get("volunteers_needed", 1)),
             required_skills=[],
@@ -593,7 +587,6 @@ def add_resource():
         return jsonify({"error": "NGO not found"}), 404
 
     data = request.get_json(silent=True) or {}
-
     required = ["name", "category", "quantity", "unit"]
     missing = [f for f in required if f not in data or not data[f]]
     if missing:
@@ -645,24 +638,23 @@ def allocate_resource(resource_id):
         return jsonify({"error": "NGO not found"}), 404
 
     data = request.get_json(silent=True) or {}
-
     resource = db.resources.find_one({"_id": to_oid(resource_id), "ngo_id": nid})
     if not resource:
         return jsonify({"error": "Resource not found"}), 404
 
     task_id = data.get("task_id")
-    amount = float(data.get("amount", 0))
+    amount  = float(data.get("amount", 0))
 
     if amount > resource["quantity"]:
         return jsonify({"error": "Insufficient quantity"}), 400
 
     new_qty = resource["quantity"] - amount
-    status = "depleted" if new_qty == 0 else "partially_used"
+    status  = "depleted" if new_qty == 0 else "partially_used"
 
     db.resources.update_one(
         {"_id": to_oid(resource_id)},
         {
-            "$set": {"quantity": new_qty, "status": status, "updated_at": utcnow()},
+            "$set":  {"quantity": new_qty, "status": status, "updated_at": utcnow()},
             "$push": {"allocated_to": {"task_id": task_id, "amount": amount}},
         }
     )

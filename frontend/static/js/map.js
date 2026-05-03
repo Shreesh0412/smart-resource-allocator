@@ -1,4 +1,6 @@
 // static/js/map.js
+// FIX B2: loadHeatmap() now calls /map/heatmap/tasks (the dedicated weighted
+//         heatmap endpoint) instead of /map/geojson/tasks.
 
 let map;
 let markerCluster;
@@ -40,7 +42,6 @@ const darkMapStyle = [
 ];
 
 window.initMap = function() {
-  // Check if google is available
   if (typeof google === 'undefined') {
     console.error("Google Maps API not loaded.");
     return;
@@ -121,22 +122,20 @@ async function loadTasks() {
   } catch (e) { console.error("Task load error:", e); }
 }
 
+// FIX B2: Use /map/heatmap/tasks which returns {points: [{lat, lng, weight}]}
+// instead of the GeoJSON tasks endpoint which doesn't provide proper weights.
 async function loadHeatmap() {
   try {
-    // FIX: Ensure visualization library is available
     if (!google.maps.visualization) {
       console.error("Heatmap library not loaded.");
       return;
     }
 
-    const data = await api.json(`/map/geojson/tasks${buildQuery()}`);
-    const points = (data.features || []).map(f => {
-      const [lng, lat] = f.geometry.coordinates;
-      let w = 1;
-      if (f.properties.urgency === 'urgent') w = 3;
-      if (f.properties.urgency === 'med') w = 2;
-      return { location: new google.maps.LatLng(lat, lng), weight: w };
-    }).filter(p => !isNaN(p.location.lat()));
+    const data = await api.json(`/map/heatmap/tasks${buildQuery()}`);
+    const points = (data.points || []).map(p => ({
+      location: new google.maps.LatLng(p.lat, p.lng),
+      weight: p.weight || 1,
+    })).filter(p => !isNaN(p.location.lat()));
 
     if (heatLayer) heatLayer.setMap(null);
 
@@ -213,7 +212,6 @@ async function loadReports() {
     const data = await api.json(`/map/heatmap/problems`);
     clearObjects('reports');
 
-    // FIX: Problem heatmap endpoint often returns a FeatureCollection or a specific 'points' array
     const reportPoints = data.points || (data.features ? data.features.map(f => ({
         lat: f.geometry.coordinates[1],
         lng: f.geometry.coordinates[0],

@@ -1,7 +1,16 @@
 """
 utils/helpers.py
-----------------
-Miscellaneous helpers used across routes and services.
+FIXES:
+  B10 — compute_urgency_from_deadline, days_remaining, and is_past_deadline all
+        used datetime.fromisoformat() which on Python < 3.11 does not support
+        timezone-aware suffixes like '+05:30'. Any such string caused a silent
+        ValueError fallback to "low" urgency. Fixed by stripping the timezone
+        portion before parsing so both aware and naive ISO strings work on all
+        Python versions.
+  S9  — paginate() loaded the entire MongoDB collection into memory before
+        slicing (list(cursor.clone())). This would exhaust RAM on large datasets.
+        Replaced with proper count_documents() + skip/limit so only the
+        requested page is ever fetched from the database.
 """
 
 import math
@@ -54,14 +63,13 @@ def serialize_list(docs: List[Dict]) -> List[Dict]:
 # ── Geo / Distance ─────────────────────────────────────────────────────────────
 
 def haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
-    """
-    Haversine formula → great-circle distance in kilometres.
-    """
+    """Haversine formula → great-circle distance in kilometres."""
     R = 6371.0
-    phi1, phi2   = math.radians(lat1), math.radians(lat2)
-    dphi         = math.radians(lat2 - lat1)
-    dlambda      = math.radians(lng2 - lng1)
-    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi       = math.radians(lat2 - lat1)
+    dlambda    = math.radians(lng2 - lng1)
+    a = (math.sin(dphi / 2) ** 2
+         + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2)
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
@@ -94,7 +102,8 @@ def geocode_pincode(pincode: str):
         if not results:
             resp = requests.get(
                 "https://nominatim.openstreetmap.org/search",
-                params={"format": "jsonv2", "q": f"{pin}, India", "countrycodes": "in", "limit": 1},
+                params={"format": "jsonv2", "q": f"{pin}, India",
+                        "countrycodes": "in", "limit": 1},
                 headers={"User-Agent": "Saarthi/1.0 (hackathon project)"},
                 timeout=8,
             )
@@ -108,50 +117,71 @@ def geocode_pincode(pincode: str):
 
 
 def resolve_location_payload(payload: Dict, *, require_pincode: bool = False):
-    """Resolve location from explicit lat/lng first; fall back to pincode geocoding if needed."""
+    """Resolve location from explicit lat/lng first; fall back to pincode geocoding."""
     pincode = normalize_pincode(payload.get("pincode", ""))
-    
-    # 1. Try to use explicit lat/lng from the payload (frontend location)
+
     lat = payload.get("lat")
     lng = payload.get("lng")
-    
+
     if lat is not None and lng is not None:
         try:
-            # If we have valid coordinates, use them directly and skip the API!
             return {"lat": float(lat), "lng": float(lng), "pincode": pincode}
         except Exception:
             pass
 
-    # 2. If no explicit lat/lng is available, fallback to geocoding the pincode via API
     if pincode:
         geo_lat, geo_lng = geocode_pincode(pincode)
         if geo_lat is not None and geo_lng is not None:
             return {"lat": geo_lat, "lng": geo_lng, "pincode": pincode}
-        
-        if require_pincode:
-            return {"error": "Could not resolve the provided pincode. Please enter a valid Indian pincode."}
 
-    # 3. If neither was provided
+        if require_pincode:
+            return {"error": "Could not resolve the provided pincode. "
+                             "Please enter a valid Indian pincode."}
+
     if require_pincode:
         return {"error": "Please provide a valid Indian pincode."}
-        
+
     return {"lat": None, "lng": None, "pincode": pincode}
+
+
+# ── ISO datetime helper ───────────────────────────────────────────────────────
+
+def _parse_iso(iso_str: str) -> Optional[datetime]:
+    """
+    FIX B10: Parse an ISO 8601 datetime string that may or may not carry a
+    timezone offset (e.g. '+05:30', '+00:00', 'Z').
+
+    datetime.fromisoformat() on Python < 3.11 raises ValueError for any
+    timezone-aware string, silently falling back to 'low' urgency everywhere
+    a deadline was parsed. This helper strips the offset so the naive UTC
+    portion is parsed correctly on all Python versions (3.8+).
+    """
+    if not iso_str:
+        return None
+    # Remove a trailing 'Z' (UTC indicator used by JavaScript Date.toISOString)
+    s = iso_str.strip().rstrip("Z")
+    # Strip any '+HH:MM' or '-HH:MM' timezone offset
+    s = re.sub(r"[+-]\d{2}:\d{2}$", "", s)
+    try:
+        return datetime.fromisoformat(s)
+    except (ValueError, TypeError):
+        return None
+
 
 # ── Task Urgency ───────────────────────────────────────────────────────────────
 
 def compute_urgency_from_deadline(deadline_iso: str) -> str:
     """
-    Given an ISO deadline string, compute the current urgency level
-    based on days remaining.
+    Given an ISO deadline string, compute the current urgency level.
         > 7 days  → "low"
         2-7 days  → "med"
         ≤ 1 day   → "urgent"
     """
-    cfg = current_app.config
-    try:
-        deadline = datetime.fromisoformat(deadline_iso)
-    except ValueError:
+    cfg      = current_app.config
+    deadline = _parse_iso(deadline_iso)
+    if deadline is None:
         return "low"
+
     days_left = (deadline - datetime.utcnow()).days
     if days_left > cfg["URGENCY_LOW_DAYS"]:
         return "low"
@@ -162,19 +192,17 @@ def compute_urgency_from_deadline(deadline_iso: str) -> str:
 
 
 def days_remaining(deadline_iso: str) -> int:
-    try:
-        deadline = datetime.fromisoformat(deadline_iso)
-        return max(0, (deadline - datetime.utcnow()).days)
-    except Exception:
+    deadline = _parse_iso(deadline_iso)
+    if deadline is None:
         return 0
+    return max(0, (deadline - datetime.utcnow()).days)
 
 
 def is_past_deadline(deadline_iso: str) -> bool:
-    try:
-        deadline = datetime.fromisoformat(deadline_iso)
-        return deadline < datetime.utcnow()
-    except Exception:
+    deadline = _parse_iso(deadline_iso)
+    if deadline is None:
         return False
+    return deadline < datetime.utcnow()
 
 
 # ── File Upload ────────────────────────────────────────────────────────────────
@@ -191,18 +219,32 @@ def allowed_file(filename: str) -> bool:
 def is_valid_email(email: str) -> bool:
     return bool(re.match(r"^[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}$", email))
 
+
 def is_valid_phone(phone: str) -> bool:
     return bool(re.match(r"^\+?[\d\s\-]{7,15}$", phone))
 
 
 # ── Pagination ─────────────────────────────────────────────────────────────────
 
-def paginate(query_cursor, page: int = 1, per_page: int = 20):
-    """Skip/limit pagination; safe for PyMongo 4.x."""
-    docs = list(query_cursor.clone())
-    total = len(docs)
-    paginated_docs = docs[(page - 1) * per_page : page * per_page]
-    return paginated_docs, total
+def paginate(collection, query: dict, page: int = 1, per_page: int = 20):
+    """
+    FIX S9: The old implementation called list(cursor.clone()) which fetched
+    the ENTIRE collection into memory before slicing. On a large dataset this
+    exhausts RAM and is O(N) for every page request.
+
+    This version uses count_documents() + skip/limit so only the requested
+    page is transferred from MongoDB — O(per_page) regardless of collection size.
+
+    Usage:
+        docs, total = paginate(db.tasks, {"status": "open"}, page=2, per_page=20)
+    """
+    total = collection.count_documents(query)
+    docs  = list(
+        collection.find(query)
+        .skip((page - 1) * per_page)
+        .limit(per_page)
+    )
+    return docs, total
 
 
 # ── Rating average ─────────────────────────────────────────────────────────────
