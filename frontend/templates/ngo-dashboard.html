@@ -100,7 +100,7 @@
           📋 <span id="reports-count" class="notif-badge" style="display:none;">!</span>
         </span>
         <span style="color:var(--text-muted);font-size:0.85rem;" id="nav-name"></span>
-        <button class="btn btn-secondary btn-sm" onclick="Auth.logout()">Logout</button>
+        <button class="btn btn-secondary btn-sm" onclick="handleLogout()">Logout</button>
       </div>
     </div>
   </nav>
@@ -412,9 +412,34 @@
 
   <div id="toast-container"></div>
   <script src="/static/js/api.js"></script>
-  
-  <script src="https://maps.googleapis.com/maps/api/js?key={{ config.GOOGLE_MAPS_API_KEY }}&libraries=visualization" async defer></script>
-  
+  <script src="https://unpkg.com/@googlemaps/markerclusterer/dist/index.min.js"></script>
+
+  <script>
+    // FIX #12: Auth.logout() is async (calls server to clear HttpOnly cookies).
+    // Inline onclick="Auth.logout()" doesn't await it — redirect races the fetch.
+    async function handleLogout() { await Auth.logout(); }
+
+    // FIX #1: Never embed the Google Maps API key directly in HTML source.
+    // It appears in View Source and is permanently stored in Git history.
+    // Fetch it from the authenticated backend and inject the script dynamically.
+    (async function loadGoogleMaps() {
+      try {
+        const data = await api.json('/map/maps-key');
+        if (!data.key) {
+          console.warn('Google Maps key unavailable — map picker disabled.');
+          return;
+        }
+        const script  = document.createElement('script');
+        script.src    = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(data.key)}&libraries=visualization`;
+        script.async  = true;
+        script.defer  = true;
+        document.head.appendChild(script);
+      } catch (e) {
+        console.warn('Could not load Google Maps:', e);
+      }
+    })();
+  </script>
+
   <script src="/static/js/ngo.js"></script>
 </body>
 </html>

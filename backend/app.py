@@ -48,7 +48,11 @@ CORS(app, resources={r"/api/*": {
 
 jwt = JWTManager(app)
 
-# S4 FIX: App-level rate limiter. auth_routes.py imports this via init_app().
+# FIX #14: Only ONE Limiter instance attached to the app.
+# Previously app.py created a Limiter with app=app, then auth_routes.py
+# created a SECOND separate Limiter and called init_app(app) on it too.
+# This meant every auth request hit both limiters causing unexpected 429s.
+# Solution: create one limiter here, import and reuse it in auth_routes.py.
 limiter = Limiter(
     get_remote_address,
     app=app,
@@ -83,15 +87,17 @@ except Exception as _index_exc:
     print(f"⚠️ MongoDB index creation skipped: {_index_exc}")
 
 
-from routes.auth_routes import auth_bp, limiter as auth_limiter
+from routes.auth_routes import auth_bp
 from routes.volunteer_routes import volunteer_bp
 from routes.ngo_routes import ngo_bp
 from routes.task_routes import task_bp
 from routes.map_routes import map_bp
 from routes.admin_routes import admin_bp
 
-# Wire the blueprint-level limiter to this app
-auth_limiter.init_app(app)
+# FIX #14: Pass the single app-level limiter to auth_routes so it uses
+# the same instance instead of creating its own second one.
+import routes.auth_routes as _auth_mod
+_auth_mod.limiter = limiter
 
 app.register_blueprint(auth_bp,      url_prefix="/api/auth")
 app.register_blueprint(volunteer_bp, url_prefix="/api/volunteer")

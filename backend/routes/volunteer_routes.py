@@ -180,7 +180,9 @@ def my_active_task():
     if not task_id:
         return jsonify({"message": "No active task", "task": None}), 200
 
-    task = db.tasks.find_one({"_id": ObjectId(task_id)})
+    # FIX #6: Use to_oid() instead of ObjectId() so a malformed active_task_id
+    # string doesn't raise InvalidId → 500. to_oid() returns None safely.
+    task = db.tasks.find_one({"_id": to_oid(task_id)})
     return jsonify({"task": serialize(task)}), 200
 
 
@@ -278,10 +280,16 @@ def reject_task(task_id):
     if not task:
         return jsonify({"error": "Task not found"}), 404
 
+    # FIX #5: Only reset status to "open" if NO other volunteers remain after
+    # pulling this one. Previously it always set status="open" even when other
+    # volunteers were still assigned, incorrectly overriding "assigned" status.
+    remaining = [v for v in task.get("assigned_volunteers", []) if str(v) != vid]
+    new_status = "open" if not remaining else task.get("status", "assigned")
+
     db.tasks.update_one(
         {"_id": to_oid(task_id)},
         {"$pull": {"assigned_volunteers": vid},
-         "$set":  {"status": "open", "updated_at": utcnow()}}
+         "$set":  {"status": new_status, "updated_at": utcnow()}}
     )
     db.volunteers.update_one(
         {"_id": ObjectId(vid)},

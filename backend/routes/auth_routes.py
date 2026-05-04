@@ -31,7 +31,11 @@ from services.task_predictor import extract_resources
 
 auth_bp = Blueprint("auth", __name__)
 
-# S4: module-level limiter — init_app() is called in app.py
+# FIX #14: This is a placeholder replaced by app.py immediately after import:
+#   import routes.auth_routes as _auth_mod
+#   _auth_mod.limiter = limiter   # the single app-level Limiter
+# This avoids creating a second Limiter instance that doubles rate-limit
+# counting when both are attached to the same Flask app.
 limiter = Limiter(get_remote_address)
 
 

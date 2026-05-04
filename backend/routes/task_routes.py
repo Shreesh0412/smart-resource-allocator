@@ -163,6 +163,10 @@ def mark_complete(task_id):
     inc_field    = "tasks_on_time" if is_ontime else "tasks_late"
 
     for vol_id in assigned_ids:
+        # FIX #7: Fire "completed" (+10) AND "ontime"/"late" (±3/−4).
+        # Previously only ontime/late was fired so volunteers never received
+        # their +10 trust points for completing a task.
+        update_trust_score(db, vol_id, event="completed")
         event = "ontime" if is_ontime else "late"
         update_trust_score(db, vol_id, event=event)
         db.volunteers.update_one(

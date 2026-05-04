@@ -259,10 +259,9 @@
     }
     loadLiveStats();
 
-    // Redirect logged-in users
+    // Redirect logged-in users to their dashboard
     if (Auth.isLoggedIn()) {
-      const type = Auth.getUserType();
-      const btn = document.createElement('a');
+      Auth.redirect();
     }
   </script>
 </body>

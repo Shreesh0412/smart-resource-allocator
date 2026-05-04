@@ -66,8 +66,15 @@ def build_ngo_analytics(db, ngo_id: str) -> dict:
     top_vol_ids = list(db.tasks.aggregate(vol_pipeline))
     top_volunteers = []
     for entry in top_vol_ids:
+        # FIX #8: entry["_id"] comes from $group on assigned_volunteers (stored
+        # as strings). ObjectId() crashes if the string is malformed. Use to_oid()
+        # which returns None safely, then skip None entries.
+        from utils.helpers import to_oid
+        vol_oid = to_oid(str(entry["_id"]))
+        if not vol_oid:
+            continue
         vol = db.volunteers.find_one(
-            {"_id": ObjectId(entry["_id"])},
+            {"_id": vol_oid},
             {"name": 1, "trust_score": 1, "verified_badge": 1}
         )
         if vol:

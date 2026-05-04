@@ -100,13 +100,14 @@ async function loadTasks() {
       });
 
       marker.addListener('click', () => {
+        // FIX #4: All API data escaped via escHtml() to prevent XSS injection
         infoWindow.setContent(`
           <div style="min-width:200px;color:#111;">
-            <div style="font-weight:700;font-size:15px;margin-bottom:6px;border-bottom:1px solid #eee;padding-bottom:6px;">${p.title || "Task"}</div>
+            <div style="font-weight:700;font-size:15px;margin-bottom:6px;border-bottom:1px solid #eee;padding-bottom:6px;">${escHtml(p.title) || "Task"}</div>
             <div style="font-size:12px;line-height:1.6;">
-              <div><b>🏷 Type:</b> ${p.task_type || '—'}</div>
-              <div><b>⚠ Urgency:</b> ${p.urgency || '—'}</div>
-              <div><b>👥 Volunteers:</b> ${p.assigned_count || 0} / ${p.volunteers_needed || 1}</div>
+              <div><b>🏷 Type:</b> ${escHtml(p.task_type) || '—'}</div>
+              <div><b>⚠ Urgency:</b> ${escHtml(p.urgency) || '—'}</div>
+              <div><b>👥 Volunteers:</b> ${escHtml(String(p.assigned_count || 0))} / ${escHtml(String(p.volunteers_needed || 1))}</div>
             </div>
           </div>
         `);
@@ -159,7 +160,8 @@ async function loadVolunteers() {
         icon: { path: google.maps.SymbolPath.CIRCLE, fillColor: '#2196f3', fillOpacity: 1, strokeColor: 'white', strokeWeight: 2, scale: 6 } 
       });
       marker.addListener('click', () => {
-        infoWindow.setContent(`<div style="color:#111;padding:5px;"><b>🏃 Volunteer:</b> ${f.properties.name}<br><b>Trust Score:</b> ${f.properties.trust_score}</div>`);
+        // FIX #4: escHtml() applied to all API-supplied strings
+        infoWindow.setContent(`<div style="color:#111;padding:5px;"><b>🏃 Volunteer:</b> ${escHtml(f.properties.name)}<br><b>Trust Score:</b> ${escHtml(String(f.properties.trust_score ?? '?'))}</div>`);
         infoWindow.open(map, marker);
       });
       mapObjects.vols.push(marker);
@@ -178,7 +180,8 @@ async function loadRoutes() {
         path: path, geodesic: true, strokeColor: '#00bcd4', strokeOpacity: 0.8, strokeWeight: 3, map: map 
       });
       polyline.addListener('click', (e) => {
-        infoWindow.setContent(`<div style="color:#111;padding:5px;"><b>🔗 Active Route</b><br>${f.properties.volunteer_name} → ${f.properties.task_title}</div>`);
+        // FIX #4: escHtml() applied to all API-supplied strings
+        infoWindow.setContent(`<div style="color:#111;padding:5px;"><b>🔗 Active Route</b><br>${escHtml(f.properties.volunteer_name)} → ${escHtml(f.properties.task_title)}</div>`);
         infoWindow.setPosition(e.latLng);
         infoWindow.open(map);
       });
@@ -199,7 +202,8 @@ async function loadNGOs() {
         icon: { path: google.maps.SymbolPath.CIRCLE, fillColor: '#9c27b0', fillOpacity: 1, strokeColor: 'white', strokeWeight: 2, scale: 8 } 
       });
       marker.addListener('click', () => {
-        infoWindow.setContent(`<div style="color:#111;padding:5px;"><b>🏢 NGO:</b> ${f.properties.name}<br><b>Focus:</b> ${(f.properties.focus_areas||[]).join(', ')}</div>`);
+        // FIX #4: escHtml() applied to all API-supplied strings
+        infoWindow.setContent(`<div style="color:#111;padding:5px;"><b>🏢 NGO:</b> ${escHtml(f.properties.name)}<br><b>Focus:</b> ${(f.properties.focus_areas||[]).map(a => escHtml(a)).join(', ')}</div>`);
         infoWindow.open(map, marker);
       });
       mapObjects.ngos.push(marker);
@@ -224,7 +228,8 @@ async function loadReports() {
         icon: { path: google.maps.SymbolPath.CIRCLE, fillColor: '#ff9800', fillOpacity: 1, strokeColor: 'white', strokeWeight: 2, scale: 7 } 
       });
       marker.addListener('click', () => {
-        infoWindow.setContent(`<div style="color:#111;padding:5px;"><b>⚠️ Unverified Report</b><br>${p.label || 'Community Issue'}</div>`);
+        // FIX #4: escHtml() applied to p.label from API
+        infoWindow.setContent(`<div style="color:#111;padding:5px;"><b>⚠️ Unverified Report</b><br>${escHtml(p.label) || 'Community Issue'}</div>`);
         infoWindow.open(map, marker);
       });
       mapObjects.reports.push(marker);

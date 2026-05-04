@@ -68,7 +68,7 @@
           🔔 <span id="notif-count" class="notif-badge" style="display:none;">0</span>
         </span>
         <span class="nav-link" style="color:var(--text-muted);font-size:0.85rem;" id="nav-name"></span>
-        <button class="btn btn-secondary btn-sm" onclick="Auth.logout()">Logout</button>
+        <button class="btn btn-secondary btn-sm" onclick="handleLogout()">Logout</button>
       </div>
     </div>
   </nav>
@@ -323,6 +323,12 @@
 
   <div id="toast-container"></div>
   <script src="/static/js/api.js"></script>
+  <script>
+    // FIX #12: Auth.logout() is async (calls server to clear HttpOnly cookies).
+    // onclick="Auth.logout()" doesn't await it — the redirect races the fetch.
+    // This named handler awaits it properly.
+    async function handleLogout() { await Auth.logout(); }
+  </script>
   <script src="/static/js/volunteer.js"></script>
 </body>
 </html>
