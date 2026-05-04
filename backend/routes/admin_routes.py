@@ -1,12 +1,12 @@
 """
 routes/admin_routes.py
-FIXES:
-  B5 — homepage_stats completed_today was always 0 because today_start used
-       datetime.now(timezone.utc).isoformat() which produces a timezone-aware
-       string like '2024-01-01T00:00:00+00:00', but completed_at is stored by
-       utcnow() as a naive string like '2024-01-01T12:00:00'. The alphabetic
-       string comparison via $gte always failed. Fixed to use naive UTC
-       consistently, matching how analytics.py does it.
+----------------------
+Platform-level admin endpoints:
+  - Grant verified badge to volunteers / NGOs
+  - Ban / unban volunteers
+  - Platform-wide analytics
+  - View all problem reports
+  - View all inefficiency flags
 """
 
 from flask import Blueprint, request, jsonify, current_app
@@ -25,7 +25,7 @@ admin_bp = Blueprint("admin", __name__)
 @admin_bp.route("/volunteers/<volunteer_id>/verify", methods=["POST"])
 @admin_required
 def verify_volunteer(volunteer_id):
-    db  = current_app.db
+    db = current_app.db
     cfg = current_app.config
 
     vol = db.volunteers.find_one({"_id": to_oid(volunteer_id)})
@@ -36,6 +36,7 @@ def verify_volunteer(volunteer_id):
         {"_id": to_oid(volunteer_id)},
         {"$set": {"is_verified": True, "verified_badge": True, "updated_at": utcnow()}}
     )
+    # Bonus trust score for getting verified
     update_trust_score(db, volunteer_id, event="verified")
 
     return jsonify({"message": f"Volunteer {vol['name']} verified and badge granted"}), 200
@@ -63,8 +64,8 @@ def verify_ngo(ngo_id):
 @admin_bp.route("/volunteers/<volunteer_id>/ban", methods=["POST"])
 @admin_required
 def ban_volunteer(volunteer_id):
-    db     = current_app.db
-    data   = request.get_json() or {}
+    db   = current_app.db
+    data = request.get_json() or {}
     action = data.get("action", "ban")   # "ban" | "unban"
 
     vol = db.volunteers.find_one({"_id": to_oid(volunteer_id)})
@@ -86,21 +87,23 @@ def ban_volunteer(volunteer_id):
 def platform_analytics():
     db = current_app.db
 
-    total_volunteers  = db.volunteers.count_documents({})
-    total_ngos        = db.ngos.count_documents({})
-    total_tasks       = db.tasks.count_documents({})
-    open_tasks        = db.tasks.count_documents({"status": "open"})
-    completed_tasks   = db.tasks.count_documents({"status": "completed"})
-    urgent_tasks      = db.tasks.count_documents({"urgency": "urgent", "status": "open"})
-    total_reports     = db.problem_reports.count_documents({})
-    pending_reports   = db.problem_reports.count_documents({"status": "pending"})
-    total_travel_logs = db.travel_logs.count_documents({})
-    flagged_travels   = db.travel_logs.count_documents({"flagged": True})
+    total_volunteers = db.volunteers.count_documents({})
+    total_ngos       = db.ngos.count_documents({})
+    total_tasks      = db.tasks.count_documents({})
+    open_tasks       = db.tasks.count_documents({"status": "open"})
+    completed_tasks  = db.tasks.count_documents({"status": "completed"})
+    urgent_tasks     = db.tasks.count_documents({"urgency": "urgent", "status": "open"})
+    total_reports    = db.problem_reports.count_documents({})
+    pending_reports  = db.problem_reports.count_documents({"status": "pending"})
+    total_travel_logs= db.travel_logs.count_documents({})
+    flagged_travels  = db.travel_logs.count_documents({"flagged": True})
 
+    # Top volunteers by trust score
     top_volunteers = list(db.volunteers.find(
         {}, {"name": 1, "trust_score": 1, "total_tasks_done": 1, "verified_badge": 1}
     ).sort("trust_score", -1).limit(10))
 
+    # Tasks by type breakdown
     task_type_pipeline = [
         {"$group": {"_id": "$task_type", "count": {"$sum": 1}}},
         {"$sort":  {"count": -1}}
@@ -110,8 +113,8 @@ def platform_analytics():
         t["task_type"] = t.pop("_id")
 
     return jsonify({
-        "volunteers": total_volunteers,
-        "ngos":       total_ngos,
+        "volunteers":     total_volunteers,
+        "ngos":           total_ngos,
         "tasks": {
             "total":     total_tasks,
             "open":      open_tasks,
@@ -123,11 +126,11 @@ def platform_analytics():
             "pending": pending_reports,
         },
         "travel": {
-            "total_logs": total_travel_logs,
-            "flagged":    flagged_travels,
+            "total_logs":  total_travel_logs,
+            "flagged":     flagged_travels,
         },
-        "top_volunteers": serialize_list(top_volunteers),
-        "tasks_by_type":  task_types,
+        "top_volunteers":  serialize_list(top_volunteers),
+        "tasks_by_type":   task_types,
     }), 200
 
 
@@ -136,7 +139,7 @@ def platform_analytics():
 @admin_bp.route("/inefficiency-flags", methods=["GET"])
 @admin_required
 def all_inefficiency_flags():
-    db   = current_app.db
+    db = current_app.db
     logs = list(db.travel_logs.find({"flagged": True}).sort("excess_km", -1).limit(200))
     return jsonify({"flagged_logs": serialize_list(logs)}), 200
 
@@ -175,42 +178,40 @@ def homepage_stats():
 
     urgent_tasks = db.tasks.count_documents({
         "urgency": "urgent",
-        "status":  {"$in": ["open", "assigned", "in_progress"]},
+        "status": {"$in": ["open", "assigned", "in_progress"]},
     })
 
+    # FIX: Count volunteers who are NOT banned/inactive rather than requiring
+    # an explicit "active" status — new volunteers may not have the field set yet.
     active_volunteers = db.volunteers.count_documents({
         "status": {"$nin": ["banned", "inactive"]},
     })
 
-    # FIX B5: Use naive UTC datetime and format as ISO string without timezone
-    # suffix, matching how utcnow() stores completed_at in the database.
-    # The old code used datetime.now(timezone.utc).isoformat() which produced
-    # '2024-01-01T00:00:00+00:00' — a timezone-aware string that never matched
-    # the naive '2024-01-01T12:00:00' strings stored by utcnow(), so
-    # completed_today was always 0.
-    from datetime import datetime
-    today_start = datetime.utcnow().replace(
+    # FIX: utcnow() stores ISO strings in MongoDB, so compare with a string too.
+    # Using a datetime object here would be a type mismatch and always return 0.
+    from datetime import datetime, timezone
+    today_start = datetime.now(timezone.utc).replace(
         hour=0, minute=0, second=0, microsecond=0
     ).isoformat()
 
     completed_today = db.tasks.count_documents({
-        "status":       "completed",
+        "status": "completed",
         "completed_at": {"$gte": today_start},
     })
 
     return jsonify({
-        "urgent_tasks":       urgent_tasks,
-        "active_volunteers":  active_volunteers,
-        "completed_today":    completed_today,
+        "urgent_tasks": urgent_tasks,
+        "active_volunteers": active_volunteers,
+        "completed_today": completed_today,
     }), 200
 
 
-# ── Leaderboard ───────────────────────────────────────────────────────────────
+# ── Leaderboard (top volunteers by trust score) ───────────────────────────────
 
 @admin_bp.route("/leaderboard", methods=["GET"])
 def leaderboard():
     """Public leaderboard — no auth needed."""
-    db  = current_app.db
+    db = current_app.db
     top = list(db.volunteers.find(
         {"status": "active"},
         {"name": 1, "trust_score": 1, "total_tasks_done": 1,

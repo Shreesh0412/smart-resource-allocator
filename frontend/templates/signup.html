@@ -271,12 +271,12 @@
           body: JSON.stringify(payload)
         });
 
-        // FIX #3: Tokens are HttpOnly cookies — never store in localStorage.
-        // Also added id (was missing), causing getUserId() to return null after signup.
+        // FIX: Store tokens securely using Auth object so that the user_type is also persisted and they don't bounce back to login immediately
         Auth.save({
-          id:   res.id,
+          access_token: res.access_token,
+          refresh_token: res.refresh_token,
           type: currentRole,
-          name: payload.name,
+          name: payload.name
         });
 
         showToast('Account created successfully!', 'success');

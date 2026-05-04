@@ -175,7 +175,7 @@ def _notify_ngo_of_inefficiency(db, ngo_id: str, log: dict, excess: float):
     doc = notification_schema(
         recipient_id   = ngo_id,
         recipient_type = "ngo",
-        title          = "⚠️ Travel Inefficiency Detected",
+        title          = " Travel Inefficiency Detected",
         message        = (f"A volunteer traveled {excess:.1f} km more than necessary "
                           f"for task {log.get('task_id', '')}. "
                           "Consider enabling geo-based auto-matching."),

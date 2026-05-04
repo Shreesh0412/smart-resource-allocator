@@ -1,12 +1,12 @@
 """
 routes/map_routes.py
-ADDITION for S1 fix:
-  A new /api/map/maps-key endpoint returns the Google Maps API key only to
-  authenticated users. This replaces embedding the key directly in the Jinja2
-  template (map.html), where it was visible in the page source to anyone.
-
-  The key is injected dynamically via JavaScript in map.html after the user's
-  session is validated, so it never appears in the initial HTML payload.
+--------------------
+Endpoints that power the Map view:
+  - Heatmap data  (problem density / task density by geo-grid)
+  - Task pins     (GeoJSON FeatureCollection for map markers)
+  - Volunteer positions (live volunteer locations for NGO view)
+  - Cluster summary   (bucketed counts per area)
+  - Line map data     (volunteer → task routing lines)
 """
 
 from flask import Blueprint, request, jsonify, current_app
@@ -18,36 +18,27 @@ from utils.helpers import serialize_list, to_oid
 map_bp = Blueprint("map", __name__)
 
 
-# ── S1 Fix: Serve Maps API key only to authenticated users ────────────────────
-
-@map_bp.route("/maps-key", methods=["GET"])
-@any_authenticated
-def maps_key():
-    """
-    Returns the Google Maps API key to authenticated clients only.
-    map.html fetches this and injects the Maps script dynamically,
-    keeping the key out of the HTML source.
-    """
-    key = current_app.config.get("GOOGLE_MAPS_API_KEY", "")
-    return jsonify({"key": key}), 200
-
-
 # ── Heatmap — Task / Problem Density ──────────────────────────────────────────
 
 @map_bp.route("/heatmap/tasks", methods=["GET"])
 @any_authenticated
 def task_heatmap():
+    """
+    Returns GeoJSON-compatible heatmap data.
+    Each point = {lat, lng, weight} where weight reflects urgency.
+    Optional filters: status, urgency, task_type, ngo_id
+    """
     db      = current_app.db
-    status  = request.args.get("status")
+    status  = request.args.get("status")          # open|in_progress|completed
     urgency = request.args.get("urgency")
     ttype   = request.args.get("task_type")
     ngo_id  = request.args.get("ngo_id")
 
     query = {}
-    if status:  query["status"]    = status
-    if urgency: query["urgency"]   = urgency
-    if ttype:   query["task_type"] = ttype
-    if ngo_id:  query["ngo_id"]    = ngo_id
+    if status:   query["status"]    = status
+    if urgency:  query["urgency"]   = urgency
+    if ttype:    query["task_type"] = ttype
+    if ngo_id:   query["ngo_id"]    = ngo_id
 
     urgency_weight = {"low": 1, "med": 3, "urgent": 5}
 
@@ -75,6 +66,7 @@ def task_heatmap():
 @map_bp.route("/heatmap/problems", methods=["GET"])
 @any_authenticated
 def problem_heatmap():
+    """Heatmap of raw community problem reports."""
     db     = current_app.db
     status = request.args.get("status", "pending")
 
@@ -101,6 +93,10 @@ def problem_heatmap():
 @map_bp.route("/geojson/tasks", methods=["GET"])
 @any_authenticated
 def task_geojson():
+    """
+    Returns a GeoJSON FeatureCollection for rendering task markers on the map.
+    Each feature carries full task metadata as properties.
+    """
     db        = current_app.db
     status    = request.args.get("status")
     urgency   = request.args.get("urgency")
@@ -111,37 +107,45 @@ def task_geojson():
     if urgency:   query["urgency"]   = urgency
     if task_type: query["task_type"] = task_type
 
-    tasks    = list(db.tasks.find(query))
+    tasks = list(db.tasks.find(query))
     features = []
     for t in tasks:
         features.append({
             "type": "Feature",
             "geometry": {
                 "type":        "Point",
-                "coordinates": [t["lng"], t["lat"]]
+                "coordinates": [t["lng"], t["lat"]]   # GeoJSON is [lng, lat]
             },
             "properties": {
-                "id":                str(t["_id"]),
-                "title":             t.get("title", ""),
-                "task_type":         t.get("task_type", ""),
-                "urgency":           t.get("urgency", "low"),
-                "status":            t.get("status", "open"),
-                "deadline":          t.get("deadline", ""),
-                "description":       t.get("description", ""),
-                "address":           t.get("address", ""),
-                "volunteers_needed": t.get("volunteers_needed", 1),
-                "assigned_count":    len(t.get("assigned_volunteers", [])),
+                "id":          str(t["_id"]),
+                "title":       t.get("title", ""),
+                "task_type":   t.get("task_type", ""),
+                "urgency":     t.get("urgency", "low"),
+                "status":      t.get("status", "open"),
+                "deadline":    t.get("deadline", ""),
+                "description": t.get("description", ""),
+                "address":     t.get("address", ""),
+                "volunteers_needed":  t.get("volunteers_needed", 1),
+                "assigned_count":     len(t.get("assigned_volunteers", [])),
             }
         })
 
-    return jsonify({"type": "FeatureCollection", "features": features}), 200
+    return jsonify({
+        "type":     "FeatureCollection",
+        "features": features
+    }), 200
 
 
-# ── Live Volunteer Positions ──────────────────────────────────────────────────
+# ── Live Volunteer Positions (for NGO view) ───────────────────────────────────
 
 @map_bp.route("/volunteers/positions", methods=["GET"])
 @any_authenticated
 def volunteer_positions():
+    """
+    Returns current geo-positions of all active volunteers.
+    NGOs use this for real-time oversight.
+    Optional filter: task_id → only volunteers assigned to that task.
+    """
     db      = current_app.db
     task_id = request.args.get("task_id")
 
@@ -149,7 +153,7 @@ def volunteer_positions():
     if task_id:
         task = db.tasks.find_one({"_id": to_oid(task_id)})
         if task:
-            assigned    = task.get("assigned_volunteers", [])
+            assigned = task.get("assigned_volunteers", [])
             query["_id"] = {"$in": [to_oid(v) for v in assigned if to_oid(v)]}
 
     volunteers = list(db.volunteers.find(
@@ -182,8 +186,13 @@ def volunteer_positions():
 @map_bp.route("/lines/volunteer-to-task", methods=["GET"])
 @any_authenticated
 def volunteer_to_task_lines():
+    """
+    Returns LineString GeoJSON connecting each active volunteer
+    to their assigned task location. Used for the line-map view.
+    """
     db = current_app.db
 
+    # Active tasks with assigned volunteers
     active_tasks = list(db.tasks.find(
         {"status": {"$in": ["assigned", "in_progress"]}},
         {"lat": 1, "lng": 1, "assigned_volunteers": 1, "title": 1}
@@ -203,8 +212,8 @@ def volunteer_to_task_lines():
                 "geometry": {
                     "type": "LineString",
                     "coordinates": [
-                        [vol["lng"], vol["lat"]],
-                        [task["lng"], task["lat"]],
+                        [vol["lng"], vol["lat"]],      # volunteer pos
+                        [task["lng"], task["lat"]],    # task pos
                     ]
                 },
                 "properties": {
@@ -218,28 +227,37 @@ def volunteer_to_task_lines():
     return jsonify({"type": "FeatureCollection", "features": lines}), 200
 
 
-# ── Geo Clusters ─────────────────────────────────────────────────────────────
+# ── Geo Clusters — Summary counts per region ──────────────────────────────────
 
 @map_bp.route("/clusters", methods=["GET"])
 @any_authenticated
 def geo_clusters():
+    """
+    Uses MongoDB $bucketAuto to group tasks into geo-regions
+    and return cluster summary for high-level map overview.
+    Grid size controlled by ?precision=2 (number of decimal places for lat/lng bucketing).
+    """
     db        = current_app.db
-    precision = int(request.args.get("precision", 2))
+    precision = int(request.args.get("precision", 2))   # lat/lng decimal rounding
     status    = request.args.get("status", "open")
 
+    # Round lat/lng to given precision then group/count
     pipeline = [
         {"$match": {"status": status}},
         {"$project": {
-            "urgency":    1,
+            "urgency": 1,
             "lat_bucket": {"$round": ["$lat", precision]},
             "lng_bucket": {"$round": ["$lng", precision]},
         }},
         {"$group": {
-            "_id": {"lat": "$lat_bucket", "lng": "$lng_bucket"},
-            "count":        {"$sum": 1},
-            "urgent_count": {"$sum": {"$cond": [{"$eq": ["$urgency", "urgent"]}, 1, 0]}},
-            "med_count":    {"$sum": {"$cond": [{"$eq": ["$urgency", "med"]},    1, 0]}},
-            "low_count":    {"$sum": {"$cond": [{"$eq": ["$urgency", "low"]},    1, 0]}},
+            "_id": {
+                "lat": "$lat_bucket",
+                "lng": "$lng_bucket",
+            },
+            "count":          {"$sum": 1},
+            "urgent_count":   {"$sum": {"$cond": [{"$eq": ["$urgency", "urgent"]}, 1, 0]}},
+            "med_count":      {"$sum": {"$cond": [{"$eq": ["$urgency", "med"]},    1, 0]}},
+            "low_count":      {"$sum": {"$cond": [{"$eq": ["$urgency", "low"]},    1, 0]}},
         }},
         {"$project": {
             "lat":          "$_id.lat",
@@ -253,7 +271,7 @@ def geo_clusters():
 
     clusters = list(db.tasks.aggregate(pipeline))
     for c in clusters:
-        c.pop("_id", None)
+        c.pop("_id", None)   # remove mongo _id for clean JSON
 
     return jsonify({"clusters": clusters, "precision": precision}), 200
 
@@ -263,7 +281,8 @@ def geo_clusters():
 @map_bp.route("/ngos", methods=["GET"])
 @any_authenticated
 def ngo_locations():
-    db   = current_app.db
+    """All NGO locations for display on public/volunteer map."""
+    db = current_app.db
     ngos = list(db.ngos.find(
         {"status": "active"},
         {"name": 1, "lat": 1, "lng": 1, "focus_areas": 1}

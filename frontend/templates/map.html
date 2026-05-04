@@ -5,50 +5,59 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Live Map — Saarthi</title>
   <link rel="stylesheet" href="/static/css/main.css">
+  
   <style>
+    /* Full screen map styling */
     body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: var(--bg); }
     .navbar { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; }
-
+    
     #map {
       position: absolute;
-      top: 64px; bottom: 0; width: 100%; z-index: 1;
+      top: 64px;
+      bottom: 0;
+      width: 100%;
+      z-index: 1;
     }
-
+    
+    /* Floating control panel */
     #map-panel {
       position: absolute;
-      top: 84px; left: 24px; z-index: 10;
+      top: 84px;
+      left: 24px;
+      z-index: 10;
       background: rgba(30, 35, 45, 0.95);
       border: 1px solid var(--border);
       border-radius: var(--radius-lg);
-      padding: 24px; width: 360px;
+      padding: 24px;
+      width: 360px; /* Slightly wider for the grid */
       box-shadow: var(--shadow-lg);
       backdrop-filter: blur(10px);
     }
 
     .filter-group { margin-bottom: 14px; }
-    .filter-label {
-      display: block; font-size: 0.8rem; font-weight: 700;
-      text-transform: uppercase; letter-spacing: 0.05em;
-      margin-bottom: 6px; color: var(--text-dim);
-    }
-    .filter-select {
-      width: 100%; padding: 10px; background: var(--surface);
-      border: 1px solid var(--border); color: var(--text);
-      border-radius: var(--radius); outline: none; cursor: pointer;
+    .filter-label { display: block; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; color: var(--text-dim); }
+    .filter-select { 
+      width: 100%; padding: 10px; background: var(--surface); border: 1px solid var(--border); 
+      color: var(--text); border-radius: var(--radius); outline: none; cursor: pointer;
     }
     .filter-select:focus { border-color: var(--orange); }
-
-    .layer-grid {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;
+    
+    /* Layer Grid System */
+    .layer-grid { 
+      display: grid; 
+      grid-template-columns: 1fr 1fr; 
+      gap: 10px; 
+      margin-top: 10px; 
     }
-    .toggle-btn {
-      padding: 10px; text-align: center; border-radius: var(--radius); cursor: pointer;
-      border: 1px solid var(--border); background: var(--surface); color: var(--text-muted);
-      font-size: 0.8rem; font-weight: 600; transition: all var(--anim-fast);
+    .toggle-btn { 
+      padding: 10px; text-align: center; border-radius: var(--radius); cursor: pointer; 
+      border: 1px solid var(--border); background: var(--surface); color: var(--text-muted); 
+      font-size: 0.8rem; font-weight: 600; transition: all var(--anim-fast); 
       display: flex; align-items: center; justify-content: center; gap: 6px;
     }
     .toggle-btn.active { background: var(--orange-glow); border-color: var(--orange); color: var(--orange); }
-
+    
+    /* Make Google Maps InfoWindow readable by default */
     .gm-style-iw-c { padding: 0 !important; border-radius: var(--radius) !important; }
     .gm-style-iw-d { padding: 16px !important; overflow: hidden !important; }
   </style>
@@ -66,8 +75,8 @@
   <div id="map"></div>
 
   <div id="map-panel">
-    <h3 style="margin-bottom:20px;font-family:var(--font-display);letter-spacing:0.04em;font-size:1.4rem;">LIVE MAP</h3>
-
+    <h3 style="margin-bottom: 20px; font-family: var(--font-display); letter-spacing: 0.04em; font-size: 1.4rem;">LIVE MAP</h3>
+    
     <div class="filter-group">
       <label class="filter-label">Task Urgency</label>
       <select id="filter-urgency" class="filter-select">
@@ -93,70 +102,37 @@
       </select>
     </div>
 
-    <label class="filter-label" style="margin-top:24px;">Map Layers</label>
+    <label class="filter-label" style="margin-top: 24px;">Map Layers</label>
     <div class="layer-grid">
-      <div id="btn-tasks"   class="toggle-btn active" onclick="toggleLayer('tasks')">📍 Tasks (<span id="count">0</span>)</div>
-      <div id="btn-heatmap" class="toggle-btn"        onclick="toggleLayer('heatmap')">🔥 Heatmap</div>
-      <div id="btn-vols"    class="toggle-btn"        onclick="toggleLayer('vols')">🏃 Volunteers</div>
-      <div id="btn-routes"  class="toggle-btn"        onclick="toggleLayer('routes')">🔗 Routes</div>
-      <div id="btn-ngos"    class="toggle-btn"        onclick="toggleLayer('ngos')">🏢 NGOs</div>
-      <div id="btn-reports" class="toggle-btn"        onclick="toggleLayer('reports')">⚠️ Reports</div>
+      <div id="btn-tasks" class="toggle-btn active" onclick="toggleLayer('tasks')">📍 Tasks (<span id="count">0</span>)</div>
+      <div id="btn-heatmap" class="toggle-btn" onclick="toggleLayer('heatmap')">🔥 Heatmap</div>
+      <div id="btn-vols" class="toggle-btn" onclick="toggleLayer('vols')">🏃 Volunteers</div>
+      <div id="btn-routes" class="toggle-btn" onclick="toggleLayer('routes')">🔗 Routes</div>
+      <div id="btn-ngos" class="toggle-btn" onclick="toggleLayer('ngos')">🏢 NGOs</div>
+      <div id="btn-reports" class="toggle-btn" onclick="toggleLayer('reports')">⚠️ Reports</div>
     </div>
   </div>
 
-  <div id="maps-key-warning" style="display:none;position:absolute;top:84px;right:24px;z-index:20;
-       background:#2a1f14;border:1px solid #ff9800;color:#ffcc80;padding:10px 14px;
-       border-radius:10px;font-size:12px;max-width:320px;">
-    Google Maps API key is missing. Set GOOGLE_MAPS_API_KEY in your environment variables.
+  <div id="maps-key-warning" style="display:none;position:absolute;top:84px;right:24px;z-index:20;background:#2a1f14;border:1px solid #ff9800;color:#ffcc80;padding:10px 14px;border-radius:10px;font-size:12px;max-width:320px;">
+    Google Maps API key is missing. Set GOOGLE_MAPS_API_KEY in Render env vars.
   </div>
-
+  
   <div id="toast-container"></div>
-
+  
   <script src="/static/js/api.js"></script>
   <script src="https://unpkg.com/@googlemaps/markerclusterer/dist/index.min.js"></script>
   <script src="/static/js/map.js"></script>
+  
+  <script src="https://maps.googleapis.com/maps/api/js?key={{ config.get('GOOGLE_MAPS_API_KEY', '') }}&libraries=visualization&callback=initMap" async defer></script>
 
   <script>
-    /**
-     * FIX S1: The Google Maps API key must NEVER appear in the rendered HTML.
-     * The old approach used {{ config.get('GOOGLE_MAPS_API_KEY','') }} which
-     * embeds the key in the page source — visible to anyone via View Source or
-     * DevTools, and permanently recorded in Git history.
-     *
-     * Fix: The key is fetched from a backend endpoint (/api/map/maps-key) that
-     * only returns it to authenticated requests (the session token is sent via
-     * the Authorization header by api.js automatically). The script tag is then
-     * injected dynamically so the key is never in the initial HTML payload.
-     *
-     * ALSO REQUIRED: Restrict the key in Google Cloud Console to your domain
-     * (HTTP referrer restriction) so even if someone intercepts it they cannot
-     * use it on other origins. This is a defence-in-depth measure.
-     */
-    (async function loadGoogleMaps() {
-      try {
-        // api.js sends the JWT automatically for authenticated users.
-        // If the user is not logged in, they will be redirected by api.js.
-        const data = await api.json('/map/maps-key');
-
-        if (!data.key) {
-          document.getElementById('maps-key-warning').style.display = 'block';
-          return;
-        }
-
-        const script  = document.createElement('script');
-        script.src    = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(data.key)}&libraries=visualization&callback=initMap`;
-        script.async  = true;
-        script.defer  = true;
-        script.onerror = () => {
-          document.getElementById('maps-key-warning').style.display = 'block';
-        };
-        document.head.appendChild(script);
-
-      } catch (e) {
+    // Logic to show warning if API key is missing from the template
+    document.addEventListener("DOMContentLoaded", function() {
+      const key = "{{ config.get('GOOGLE_MAPS_API_KEY', '') }}";
+      if (!key || key.trim() === "") {
         document.getElementById('maps-key-warning').style.display = 'block';
-        console.error('Could not load Google Maps:', e);
       }
-    })();
+    });
   </script>
 </body>
 </html>

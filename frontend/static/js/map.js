@@ -1,6 +1,4 @@
 // static/js/map.js
-// FIX B2: loadHeatmap() now calls /map/heatmap/tasks (the dedicated weighted
-//         heatmap endpoint) instead of /map/geojson/tasks.
 
 let map;
 let markerCluster;
@@ -42,6 +40,7 @@ const darkMapStyle = [
 ];
 
 window.initMap = function() {
+  // Check if google is available
   if (typeof google === 'undefined') {
     console.error("Google Maps API not loaded.");
     return;
@@ -100,14 +99,13 @@ async function loadTasks() {
       });
 
       marker.addListener('click', () => {
-        // FIX #4: All API data escaped via escHtml() to prevent XSS injection
         infoWindow.setContent(`
           <div style="min-width:200px;color:#111;">
-            <div style="font-weight:700;font-size:15px;margin-bottom:6px;border-bottom:1px solid #eee;padding-bottom:6px;">${escHtml(p.title) || "Task"}</div>
+            <div style="font-weight:700;font-size:15px;margin-bottom:6px;border-bottom:1px solid #eee;padding-bottom:6px;">${p.title || "Task"}</div>
             <div style="font-size:12px;line-height:1.6;">
-              <div><b>🏷 Type:</b> ${escHtml(p.task_type) || '—'}</div>
-              <div><b>⚠ Urgency:</b> ${escHtml(p.urgency) || '—'}</div>
-              <div><b>👥 Volunteers:</b> ${escHtml(String(p.assigned_count || 0))} / ${escHtml(String(p.volunteers_needed || 1))}</div>
+              <div><b>🏷 Type:</b> ${p.task_type || '—'}</div>
+              <div><b>⚠ Urgency:</b> ${p.urgency || '—'}</div>
+              <div><b>👥 Volunteers:</b> ${p.assigned_count || 0} / ${p.volunteers_needed || 1}</div>
             </div>
           </div>
         `);
@@ -123,20 +121,22 @@ async function loadTasks() {
   } catch (e) { console.error("Task load error:", e); }
 }
 
-// FIX B2: Use /map/heatmap/tasks which returns {points: [{lat, lng, weight}]}
-// instead of the GeoJSON tasks endpoint which doesn't provide proper weights.
 async function loadHeatmap() {
   try {
+    // FIX: Ensure visualization library is available
     if (!google.maps.visualization) {
       console.error("Heatmap library not loaded.");
       return;
     }
 
-    const data = await api.json(`/map/heatmap/tasks${buildQuery()}`);
-    const points = (data.points || []).map(p => ({
-      location: new google.maps.LatLng(p.lat, p.lng),
-      weight: p.weight || 1,
-    })).filter(p => !isNaN(p.location.lat()));
+    const data = await api.json(`/map/geojson/tasks${buildQuery()}`);
+    const points = (data.features || []).map(f => {
+      const [lng, lat] = f.geometry.coordinates;
+      let w = 1;
+      if (f.properties.urgency === 'urgent') w = 3;
+      if (f.properties.urgency === 'med') w = 2;
+      return { location: new google.maps.LatLng(lat, lng), weight: w };
+    }).filter(p => !isNaN(p.location.lat()));
 
     if (heatLayer) heatLayer.setMap(null);
 
@@ -160,8 +160,7 @@ async function loadVolunteers() {
         icon: { path: google.maps.SymbolPath.CIRCLE, fillColor: '#2196f3', fillOpacity: 1, strokeColor: 'white', strokeWeight: 2, scale: 6 } 
       });
       marker.addListener('click', () => {
-        // FIX #4: escHtml() applied to all API-supplied strings
-        infoWindow.setContent(`<div style="color:#111;padding:5px;"><b>🏃 Volunteer:</b> ${escHtml(f.properties.name)}<br><b>Trust Score:</b> ${escHtml(String(f.properties.trust_score ?? '?'))}</div>`);
+        infoWindow.setContent(`<div style="color:#111;padding:5px;"><b>🏃 Volunteer:</b> ${f.properties.name}<br><b>Trust Score:</b> ${f.properties.trust_score}</div>`);
         infoWindow.open(map, marker);
       });
       mapObjects.vols.push(marker);
@@ -180,8 +179,7 @@ async function loadRoutes() {
         path: path, geodesic: true, strokeColor: '#00bcd4', strokeOpacity: 0.8, strokeWeight: 3, map: map 
       });
       polyline.addListener('click', (e) => {
-        // FIX #4: escHtml() applied to all API-supplied strings
-        infoWindow.setContent(`<div style="color:#111;padding:5px;"><b>🔗 Active Route</b><br>${escHtml(f.properties.volunteer_name)} → ${escHtml(f.properties.task_title)}</div>`);
+        infoWindow.setContent(`<div style="color:#111;padding:5px;"><b>🔗 Active Route</b><br>${f.properties.volunteer_name} → ${f.properties.task_title}</div>`);
         infoWindow.setPosition(e.latLng);
         infoWindow.open(map);
       });
@@ -202,8 +200,7 @@ async function loadNGOs() {
         icon: { path: google.maps.SymbolPath.CIRCLE, fillColor: '#9c27b0', fillOpacity: 1, strokeColor: 'white', strokeWeight: 2, scale: 8 } 
       });
       marker.addListener('click', () => {
-        // FIX #4: escHtml() applied to all API-supplied strings
-        infoWindow.setContent(`<div style="color:#111;padding:5px;"><b>🏢 NGO:</b> ${escHtml(f.properties.name)}<br><b>Focus:</b> ${(f.properties.focus_areas||[]).map(a => escHtml(a)).join(', ')}</div>`);
+        infoWindow.setContent(`<div style="color:#111;padding:5px;"><b>🏢 NGO:</b> ${f.properties.name}<br><b>Focus:</b> ${(f.properties.focus_areas||[]).join(', ')}</div>`);
         infoWindow.open(map, marker);
       });
       mapObjects.ngos.push(marker);
@@ -216,6 +213,7 @@ async function loadReports() {
     const data = await api.json(`/map/heatmap/problems`);
     clearObjects('reports');
 
+    // FIX: Problem heatmap endpoint often returns a FeatureCollection or a specific 'points' array
     const reportPoints = data.points || (data.features ? data.features.map(f => ({
         lat: f.geometry.coordinates[1],
         lng: f.geometry.coordinates[0],
@@ -228,8 +226,7 @@ async function loadReports() {
         icon: { path: google.maps.SymbolPath.CIRCLE, fillColor: '#ff9800', fillOpacity: 1, strokeColor: 'white', strokeWeight: 2, scale: 7 } 
       });
       marker.addListener('click', () => {
-        // FIX #4: escHtml() applied to p.label from API
-        infoWindow.setContent(`<div style="color:#111;padding:5px;"><b>⚠️ Unverified Report</b><br>${escHtml(p.label) || 'Community Issue'}</div>`);
+        infoWindow.setContent(`<div style="color:#111;padding:5px;"><b>⚠️ Unverified Report</b><br>${p.label || 'Community Issue'}</div>`);
         infoWindow.open(map, marker);
       });
       mapObjects.reports.push(marker);

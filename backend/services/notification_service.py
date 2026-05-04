@@ -103,15 +103,8 @@ def notify_matched_volunteers(db, volunteer_ids: List[str], task: dict, config: 
             )
             sent = send_whatsapp(vol["phone"], wa_message, config)
             if sent:
-                # FIX #9: Also filter by reference_id (task _id) so we update
-                # the correct notification when a volunteer has multiple
-                # task_match notifications pending.
                 db.notifications.update_one(
-                    {
-                        "recipient_id": vol_id,
-                        "type":         "task_match",
-                        "reference_id": str(task.get("_id", "")),
-                    },
+                    {"recipient_id": vol_id, "type": "task_match"},
                     {"$set": {"whatsapp_sent": True}}
                 )
 

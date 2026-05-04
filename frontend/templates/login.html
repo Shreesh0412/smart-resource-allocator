@@ -96,13 +96,13 @@
           ? await api.volunteerLogin(email, password)
           : await api.ngoLogin(email, password);
 
-        // FIX #2: Tokens are now HttpOnly cookies set by the server.
-        // Never store access_token / refresh_token in localStorage.
-        // Only save non-sensitive UI state.
+        // ✅ FIX: Use 'currentRole' directly instead of 'data.type'
         Auth.save({
-          id:   data.id,
-          type: currentRole,
-          name: data.name,
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+          id: data.id,
+          type: currentRole, 
+          name: data.name
         });
 
         Auth.redirect();
